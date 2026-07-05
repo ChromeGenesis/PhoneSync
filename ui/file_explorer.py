@@ -99,6 +99,9 @@ class FileExplorer(ctk.CTkFrame):
         self.scroll_frame = ctk.CTkScrollableFrame(self)
         self.scroll_frame.grid(row=1, column=0, sticky="nsew")
         self.scroll_frame.grid_columnconfigure(2, weight=1)
+        
+        # Override CTk's buggy default scroll by binding on the canvas directly
+        self._bind_scrolling(self.scroll_frame._parent_canvas)
 
         # Bottom selection tools
         self.bottom_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -119,10 +122,18 @@ class FileExplorer(ctk.CTkFrame):
                 canvas = self.scroll_frame._parent_canvas
                 num = getattr(event, 'num', 0)
                 delta = getattr(event, 'delta', 0)
-                if num == 4 or delta > 0:
-                    canvas.yview_scroll(-1, "units")
-                elif num == 5 or delta < 0:
-                    canvas.yview_scroll(1, "units")
+                
+                if num == 4:
+                    dir = -1
+                elif num == 5:
+                    dir = 1
+                elif delta != 0:
+                    dir = -1 if delta > 0 else 1
+                else:
+                    return
+                    
+                canvas.yview_scroll(dir, "units")
+                return "break"
             except Exception:
                 pass
         

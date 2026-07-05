@@ -90,8 +90,21 @@ class PhoneSyncApp(ctk.CTk):
         self.lbl_selected = ctk.CTkLabel(self.bottom_pull_bar, text="0 files selected")
         self.lbl_selected.pack(side="left")
         
-        self.btn_pull = ctk.CTkButton(self.bottom_pull_bar, text="Pull Selected Files", command=self._pull_selected, state="disabled")
+        self.btn_pull = ctk.CTkButton(
+            self.bottom_pull_bar, 
+            text="Pull Selected Files", 
+            command=self._pull_selected, 
+            state="disabled",
+            fg_color="#2B7A0B",
+            hover_color="#3D9B18",
+            text_color="white",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=40
+        )
         self.btn_pull.pack(side="right")
+
+        # Bind Enter key to pull selected files
+        self.bind("<Return>", lambda e: self._pull_selected() if self.btn_pull.cget("state") == "normal" else None)
 
         # Start connection in background
         threading.Thread(target=self._init_adb, daemon=True).start()

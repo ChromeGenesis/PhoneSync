@@ -117,9 +117,11 @@ class FileExplorer(ctk.CTkFrame):
         def _on_mousewheel(event):
             try:
                 canvas = self.scroll_frame._parent_canvas
-                if event.num == 4 or getattr(event, 'delta', 0) > 0:
+                num = getattr(event, 'num', 0)
+                delta = getattr(event, 'delta', 0)
+                if num == 4 or delta > 0:
                     canvas.yview_scroll(-1, "units")
-                elif event.num == 5 or getattr(event, 'delta', 0) < 0:
+                elif num == 5 or delta < 0:
                     canvas.yview_scroll(1, "units")
             except Exception:
                 pass

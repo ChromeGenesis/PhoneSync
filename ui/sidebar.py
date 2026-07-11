@@ -1,52 +1,443 @@
 import customtkinter as ctk
 from typing import Callable, List
+from core.config import load_saved_paths, save_custom_path, delete_saved_path
+
+# ── Design tokens ─────────────────────────────────────────────────────────────
+_SIDEBAR_BG = ("#f8fafc", "#000000")
+_NAV_HOVER_BG = ("#f1f5f9", "#0f1520")
+_NAV_ACTIVE_BG = ("#e2e8f0", "#111a28")
+_NAV_TEXT = ("#475569", "#8896b0")
+_NAV_ACTIVE_TEXT = ("#0f172a", "#e8edf5")
+_NAV_ACCENT = ("#2563eb", "#3b82f6")
+_SECTION_COLOR = ("#94a3b8", "#2a3448")
+_BTN_GREEN = ("#16a34a", "#166534")
+_BTN_GREEN_HOVER = ("#15803d", "#14532d")
+_BTN_BLUE = ("#2563eb", "#1e3a5f")
+_BTN_BLUE_HOVER = ("#1d4ed8", "#1e4976")
+_BTN_GRAY = ("#e2e8f0", "#0f1520")
+_BTN_GRAY_HOVER = ("#cbd5e1", "#151d2e")
+
+
+class _NavItem(ctk.CTkFrame):
+    """Single icon + label navigation row."""
+
+    def __init__(self, master, icon: str, label: str, on_click: Callable):
+        super().__init__(
+            master, fg_color="transparent", corner_radius=8, cursor="hand2"
+        )
+        self.grid_columnconfigure(1, weight=1)
+        self._on_click = on_click
+        self._active = False
+
+        self._icon = ctk.CTkLabel(
+            self,
+            text=icon,
+            font=ctk.CTkFont(size=15),
+            text_color=_NAV_TEXT,
+            width=26,
+            anchor="center",
+        )
+        self._icon.grid(row=0, column=0, padx=(12, 6), pady=7)
+
+        self._label = ctk.CTkLabel(
+            self,
+            text=label,
+            font=ctk.CTkFont(size=13),
+            text_color=_NAV_TEXT,
+            anchor="w",
+        )
+        self._label.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=7)
+
+        for w in (self, self._icon, self._label):
+            w.bind("<Enter>", self._enter)
+            w.bind("<Leave>", self._leave)
+            w.bind("<Button-1>", self._press)
+
+    def set_active(self, active: bool):
+        self._active = active
+        if active:
+            self.configure(fg_color=_NAV_ACTIVE_BG)
+            self._icon.configure(text_color=_NAV_ACCENT)
+            self._label.configure(
+                text_color=_NAV_ACTIVE_TEXT, font=ctk.CTkFont(size=13, weight="bold")
+            )
+        else:
+            self.configure(fg_color="transparent")
+            self._icon.configure(text_color=_NAV_TEXT)
+            self._label.configure(text_color=_NAV_TEXT, font=ctk.CTkFont(size=13))
+
+    def _enter(self, _=None):
+        if not self._active:
+            self.configure(fg_color=_NAV_HOVER_BG)
+
+    def _leave(self, _=None):
+        if not self._active:
+            self.configure(fg_color="transparent")
+
+    def _press(self, _=None):
+        self._on_click()
+
+
+class _Section(ctk.CTkLabel):
+    def __init__(self, master, text: str):
+        super().__init__(
+            master,
+            text=text.upper(),
+            font=ctk.CTkFont(size=9, weight="bold"),
+            text_color=_SECTION_COLOR,
+            anchor="w",
+        )
+
+
+def _action_btn(
+    master, text: str, icon: str = "", fg=_BTN_GRAY, hover=_BTN_GRAY_HOVER, **kw
+):
+    label = f"{icon}  {text}" if icon else text
+    return ctk.CTkButton(
+        master,
+        text=label,
+        fg_color=fg,
+        hover_color=hover,
+        text_color=("#1e293b", "#c8d4e8"),
+        font=ctk.CTkFont(size=12, weight="bold"),
+        corner_radius=8,
+        height=36,
+        anchor="w",
+        **kw,
+    )
+
+
+class PathsManagerDialog(ctk.CTkToplevel):
+    """Modal dialog for managing saved custom paths (add / delete)."""
+
+    def __init__(self, master, saved_paths: List[str], on_change: Callable):
+        super().__init__(master)
+        self.title("Manage Saved Paths")
+        self.geometry("500x440")
+        self.resizable(False, False)
+        self.configure(fg_color=("#f0f4f8", "#050a14"))
+        self.grab_set()
+        self.focus_force()
+
+        self.on_change = on_change
+        self.paths: List[str] = list(saved_paths)
+
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # ── Header ────────────────────────────────────────────────────────────
+        header = ctk.CTkFrame(
+            self, fg_color=("#e2e8f0", "#080e1c"), corner_radius=0, height=52
+        )
+        header.grid(row=0, column=0, sticky="ew")
+        header.grid_propagate(False)
+        header.grid_columnconfigure(0, weight=1)
+        header.grid_rowconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            header,
+            text="📁  Saved Paths",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=("#1e293b", "#e8edf5"),
+        ).grid(row=0, column=0, padx=20, sticky="w")
+
+        # ── Path list ─────────────────────────────────────────────────────────
+        list_frame = ctk.CTkScrollableFrame(
+            self, fg_color="transparent", scrollbar_button_color="#1a2035"
+        )
+        list_frame.grid(row=1, column=0, sticky="nsew", padx=16, pady=(12, 0))
+        list_frame.grid_columnconfigure(0, weight=1)
+
+        self.list_frame = list_frame
+        self._row_widgets: List[dict] = []
+        self._rebuild_list()
+
+        # ── Add new path ──────────────────────────────────────────────────────
+        add_frame = ctk.CTkFrame(
+            self, fg_color=("#e2e8f0", "#080e1c"), corner_radius=0, height=70
+        )
+        add_frame.grid(row=2, column=0, sticky="ew")
+        add_frame.grid_propagate(False)
+        add_frame.grid_rowconfigure(0, weight=1)
+        add_frame.grid_columnconfigure(0, weight=1)
+
+        self.entry = ctk.CTkEntry(
+            add_frame,
+            placeholder_text="  /sdcard/YourFolder/",
+            fg_color=("#ffffff", "#0b1324"),
+            border_color=("#cbd5e1", "#1e2d45"),
+            text_color=("#0f172a", "#e8edf5"),
+            placeholder_text_color=("#94a3b8", "#3a4d66"),
+            font=ctk.CTkFont(size=13),
+            height=38,
+            corner_radius=8,
+        )
+        self.entry.grid(row=0, column=0, padx=(16, 8), sticky="ew")
+        self.entry.bind("<Return>", lambda _: self._add_path())
+
+        ctk.CTkButton(
+            add_frame,
+            text="Add",
+            width=64,
+            height=38,
+            fg_color=("#2563eb", "#1e3a5f"),
+            hover_color=("#1d4ed8", "#1e4976"),
+            text_color=("#ffffff", "#7dd3fc"),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            corner_radius=8,
+            command=self._add_path,
+        ).grid(row=0, column=1, padx=(0, 16))
+
+    def _rebuild_list(self):
+        for w in self._row_widgets:
+            w["frame"].destroy()
+        self._row_widgets.clear()
+
+        if not self.paths:
+            ctk.CTkLabel(
+                self.list_frame,
+                text="No saved paths yet.\nAdd one below ↓",
+                font=ctk.CTkFont(size=13),
+                text_color=("#64748b", "#2a3448"),
+                justify="center",
+            ).grid(row=0, column=0, pady=32)
+            return
+
+        for i, path in enumerate(self.paths):
+            row = ctk.CTkFrame(
+                self.list_frame,
+                fg_color=("#ffffff", "#080e1c"),
+                corner_radius=8,
+                border_width=1,
+                border_color=("#e2e8f0", "#111d30"),
+            )
+            row.grid(row=i, column=0, sticky="ew", pady=4)
+            row.grid_columnconfigure(0, weight=1)
+
+            ctk.CTkLabel(
+                row,
+                text=path,
+                font=ctk.CTkFont(size=12),
+                text_color=("#334155", "#94a3b8"),
+                anchor="w",
+            ).grid(row=0, column=0, padx=14, pady=10, sticky="w")
+
+            ctk.CTkButton(
+                row,
+                text="✕",
+                width=30,
+                height=28,
+                fg_color=("#fee2e2", "#1a0a0a"),
+                hover_color=("#fecaca", "#3b0f0f"),
+                text_color=("#ef4444", "#ef4444"),
+                font=ctk.CTkFont(size=12),
+                corner_radius=6,
+                command=lambda p=path: self._delete_path(p),
+            ).grid(row=0, column=1, padx=(0, 10))
+
+            self._row_widgets.append({"frame": row})
+
+    def _add_path(self):
+        path = self.entry.get().strip()
+        if not path:
+            return
+        if not path.endswith("/"):
+            path += "/"
+        if path not in self.paths:
+            save_custom_path(path)
+            self.paths.append(path)
+            self._rebuild_list()
+            self.on_change(self.paths, path)
+        self.entry.delete(0, "end")
+
+    def _delete_path(self, path: str):
+        self.paths = delete_saved_path(path)
+        self._rebuild_list()
+        self.on_change(self.paths, None)
+
 
 class Sidebar(ctk.CTkFrame):
-    def __init__(self, master, on_path_select: Callable[[str], None], on_push_file: Callable[[], None], saved_paths: List[str], on_ask_custom_path: Callable[[], None], on_change_dest: Callable[[], None]):
-        super().__init__(master, width=220, corner_radius=0)
-        self.grid_rowconfigure(9, weight=1)
-        
+    def __init__(
+        self,
+        master,
+        on_path_select: Callable[[str], None],
+        on_push_file: Callable[[], None],
+        on_push_folder: Callable[[], None],
+        saved_paths: List[str],
+        on_ask_custom_path: Callable[[], None],
+        on_change_dest: Callable[[], None],
+    ):
+        super().__init__(master, width=232, corner_radius=0, fg_color=_SIDEBAR_BG)
+        self.grid_propagate(False)
+        self.grid_columnconfigure(0, weight=1)
+        # Row layout: 0=logo, 1=browse section, 2-6=nav items, 7=spacer, 8=saved paths, 9=transfer
+        self.grid_rowconfigure(7, weight=1)
+
         self.on_path_select = on_path_select
-        
-        self.logo_label = ctk.CTkLabel(self, text="Phone Sync", font=ctk.CTkFont(size=20, weight="bold"))
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self._nav_items: dict[str, _NavItem] = {}
+        self._active_key = ""
+        self._saved_paths: List[str] = list(saved_paths)
+        self._master = master
 
-        self.btn_recents = ctk.CTkButton(self, text="Recents", command=lambda: self.on_path_select("RECENTS"))
-        self.btn_recents.grid(row=1, column=0, padx=20, pady=(10, 10))
+        # ── Logo ──────────────────────────────────────────────────────────────
+        logo = ctk.CTkFrame(self, fg_color="transparent")
+        logo.grid(row=0, column=0, sticky="ew", padx=16, pady=(22, 18))
 
-        self.btn_screenshots = ctk.CTkButton(self, text="Screenshots", command=lambda: self.on_path_select("SCREENSHOTS"))
-        self.btn_screenshots.grid(row=2, column=0, padx=20, pady=10)
+        ctk.CTkLabel(
+            logo, text="⬡", font=ctk.CTkFont(size=20), text_color=_NAV_ACCENT
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(
+            logo,
+            text="PhoneSync",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#e8edf5",
+        ).pack(side="left")
 
-        self.btn_downloads = ctk.CTkButton(self, text="Downloads", command=lambda: self.on_path_select("/sdcard/Download/"))
-        self.btn_downloads.grid(row=3, column=0, padx=20, pady=10)
+        # ── Browse nav ────────────────────────────────────────────────────────
+        _Section(self, "Browse").grid(
+            row=1, column=0, sticky="ew", padx=16, pady=(0, 2)
+        )
 
-        self.btn_camera = ctk.CTkButton(self, text="Camera", command=lambda: self.on_path_select("/sdcard/DCIM/Camera/"))
-        self.btn_camera.grid(row=4, column=0, padx=20, pady=10)
-        
-        self.btn_custom = ctk.CTkButton(self, text="New Custom Path", command=on_ask_custom_path)
-        self.btn_custom.grid(row=5, column=0, padx=20, pady=10)
-        
-        self.saved_paths_label = ctk.CTkLabel(self, text="Saved Custom Paths:")
-        self.saved_paths_label.grid(row=6, column=0, padx=20, pady=(15, 0))
-        
-        opts = saved_paths if saved_paths else ["No saved paths"]
-        self.saved_paths_menu = ctk.CTkOptionMenu(self, values=opts, command=self._on_saved_path_select)
-        self.saved_paths_menu.grid(row=7, column=0, padx=20, pady=5)
-        
-        self.btn_change_dest = ctk.CTkButton(self, text="Set Save Location", fg_color="gray", hover_color="darkgray", command=on_change_dest)
-        self.btn_change_dest.grid(row=8, column=0, padx=20, pady=20)
+        nav_defs = [
+            ("recents", "🕐", "Recent Files", "RECENTS"),
+            ("screenshots", "📸", "Screenshots", "SCREENSHOTS"),
+            ("downloads", "📥", "Downloads", "/sdcard/Download/"),
+            ("camera", "📷", "Camera", "/sdcard/DCIM/Camera/"),
+            ("custom", "📁", "Custom Path…", None),
+        ]
+        for i, (key, icon, label, path) in enumerate(nav_defs):
+            cmd = (
+                (lambda p=path: self._nav_click(key, p)) if path else on_ask_custom_path
+            )
+            item = _NavItem(self, icon, label, cmd)
+            item.grid(row=2 + i, column=0, sticky="ew", padx=8, pady=1)
+            self._nav_items[key] = item
 
-        self.btn_push = ctk.CTkButton(self, text="Push File to Phone", fg_color="green", hover_color="darkgreen", command=on_push_file)
-        self.btn_push.grid(row=10, column=0, padx=20, pady=10)
-        
-        self.btn_send_text = ctk.CTkButton(self, text="Send Text / Link", fg_color="#3b82f6", hover_color="#2563eb", command=lambda: getattr(master, "send_text_or_link", lambda: None)())
-        self.btn_send_text.grid(row=11, column=0, padx=20, pady=10)
-        
+        # ── Saved Paths block ─────────────────────────────────────────────────
+        saved_block = ctk.CTkFrame(self, fg_color="transparent")
+        saved_block.grid(row=6, column=0, sticky="ew", padx=8, pady=(10, 0))
+        saved_block.grid_columnconfigure(0, weight=1)
+
+        # Section header with Manage button inline
+        sh = ctk.CTkFrame(saved_block, fg_color="transparent")
+        sh.grid(row=0, column=0, sticky="ew", padx=8, pady=(0, 4))
+        sh.grid_columnconfigure(0, weight=1)
+
+        _Section(sh, "Saved Paths").grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            sh,
+            text="Manage",
+            width=56,
+            height=20,
+            fg_color="transparent",
+            hover_color="#0f1520",
+            text_color="#3b82f6",
+            font=ctk.CTkFont(size=11),
+            corner_radius=4,
+            command=self._open_paths_manager,
+        ).grid(row=0, column=1, sticky="e")
+
+        opts = self._saved_paths if self._saved_paths else ["No saved paths"]
+        self.saved_paths_menu = ctk.CTkOptionMenu(
+            saved_block,
+            values=opts,
+            command=self._on_saved_path_select,
+            fg_color=("#e2e8f0", "#080e1c"),
+            button_color=("#cbd5e1", "#111d30"),
+            button_hover_color=("#94a3b8", "#1a2d48"),
+            dropdown_fg_color=("#ffffff", "#080e1c"),
+            text_color=("#1e293b", "#8896b0"),
+            font=ctk.CTkFont(size=12),
+            corner_radius=8,
+            height=34,
+            dynamic_resizing=False,
+        )
+        self.saved_paths_menu.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 4))
+
+        # ── Spacer ────────────────────────────────────────────────────────────
+        # row 7 absorbs leftover space
+
+        # ── Transfer section ──────────────────────────────────────────────────
+        transfer = ctk.CTkFrame(self, fg_color="transparent")
+        transfer.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 16))
+        transfer.grid_columnconfigure(0, weight=1)
+
+        _Section(transfer, "Transfer").grid(
+            row=0, column=0, sticky="ew", padx=8, pady=(0, 6)
+        )
+
+        self.btn_push = _action_btn(
+            transfer,
+            "Push Files",
+            "⬆",
+            fg=_BTN_GREEN,
+            hover=_BTN_GREEN_HOVER,
+            command=on_push_file,
+        )
+        self.btn_push.grid(row=1, column=0, sticky="ew", padx=8, pady=3)
+
+        self.btn_push_folder = _action_btn(
+            transfer,
+            "Push Folder",
+            "📂",
+            fg="#0a2e1a",
+            hover=_BTN_GREEN_HOVER,
+            command=on_push_folder,
+        )
+        self.btn_push_folder.grid(row=2, column=0, sticky="ew", padx=8, pady=3)
+
+        self.btn_send_text = _action_btn(
+            transfer,
+            "Send Text / Link",
+            "✉",
+            fg=_BTN_BLUE,
+            hover=_BTN_BLUE_HOVER,
+            command=lambda: getattr(master, "send_text_or_link", lambda: None)(),
+        )
+        self.btn_send_text.grid(row=3, column=0, sticky="ew", padx=8, pady=3)
+
+        self.btn_change_dest = _action_btn(
+            transfer,
+            "Set Save Folder",
+            "📌",
+            command=on_change_dest,
+        )
+        self.btn_change_dest.grid(row=4, column=0, sticky="ew", padx=8, pady=(3, 0))
+
+    # ── Nav helpers ───────────────────────────────────────────────────────────
+    def _nav_click(self, key: str, path: str):
+        self._set_active(key)
+        self.on_path_select(path)
+
+    def _set_active(self, key: str):
+        if self._active_key and self._active_key in self._nav_items:
+            self._nav_items[self._active_key].set_active(False)
+        self._active_key = key
+        if key in self._nav_items:
+            self._nav_items[key].set_active(True)
+
     def _on_saved_path_select(self, path: str):
         if path != "No saved paths":
+            self._set_active("")
             self.on_path_select(path)
-            
-    def update_saved_paths(self, new_paths: List[str], current_path: str):
-        self.saved_paths_menu.configure(values=new_paths)
-        if current_path in new_paths:
+
+    def update_saved_paths(self, new_paths: List[str], current_path: str | None):
+        self._saved_paths = list(new_paths)
+        opts = new_paths if new_paths else ["No saved paths"]
+        self.saved_paths_menu.configure(values=opts)
+        if current_path and current_path in new_paths:
             self.saved_paths_menu.set(current_path)
+        elif not new_paths:
+            self.saved_paths_menu.set("No saved paths")
+
+    def _open_paths_manager(self):
+        dlg = PathsManagerDialog(
+            self._master,
+            saved_paths=self._saved_paths,
+            on_change=self._on_paths_changed,
+        )
+        dlg.transient(self._master)
+
+    def _on_paths_changed(self, new_paths: List[str], last_added: str | None):
+        self.update_saved_paths(new_paths, last_added)

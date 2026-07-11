@@ -24,13 +24,13 @@ except ImportError:
     pass
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
-_APP_BG = "#000000"
-_MAIN_BG = "#000000"
-_SURFACE = "#000000"
-_BORDER = "#141a29"
+_APP_BG = "#0f1117"
+_MAIN_BG = "#0f1117"
+_SURFACE = "#141824"
+_BORDER = "#1e2540"
 
 _TEXT_PRIMARY = "#dde4f0"
-_TEXT_MUTED = "#4c5a75"
+_TEXT_MUTED = "#6b7280"
 _ACCENT = "#3b82f6"
 _GREEN = "#16a34a"
 _GREEN_HOVER = "#15803d"
@@ -145,9 +145,9 @@ class PhoneSyncApp(ctk.CTk):
             text="\u27f3  Refresh",
             width=92,
             height=32,
-            fg_color="#0f1a2e",
-            hover_color="#162540",
-            text_color="#6a7f9e",
+            fg_color="#1e2540",
+            hover_color="#2d3558",
+            text_color="#60a5fa",
             font=ctk.CTkFont(size=12),
             corner_radius=8,
             command=self._refresh,

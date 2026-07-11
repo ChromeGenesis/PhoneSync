@@ -3,19 +3,19 @@ from typing import Callable, List
 from core.config import load_saved_paths, save_custom_path, delete_saved_path
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
-_SIDEBAR_BG = "#000000"
-_NAV_HOVER_BG = "#080b11"
-_NAV_ACTIVE_BG = "#0f1520"
-_NAV_TEXT = "#8896b0"
+_SIDEBAR_BG = "#0f1117"
+_NAV_HOVER_BG = "#181c27"
+_NAV_ACTIVE_BG = "#1e2230"
+_NAV_TEXT = "#a0a8c0"
 _NAV_ACTIVE_TEXT = "#ffffff"
 _NAV_ACCENT = "#3b82f6"
-_SECTION_COLOR = "#2a3448"
-_BTN_GREEN = "#166534"
-_BTN_GREEN_HOVER = "#14532d"
-_BTN_BLUE = "#1e3a5f"
-_BTN_BLUE_HOVER = "#1e4976"
-_BTN_GRAY = "#0f1520"
-_BTN_GRAY_HOVER = "#151d2e"
+_SECTION_COLOR = "#4a5070"
+_BTN_GREEN = "#16a34a"
+_BTN_GREEN_HOVER = "#15803d"
+_BTN_BLUE = "#2563eb"
+_BTN_BLUE_HOVER = "#1d4ed8"
+_BTN_GRAY = "#1e2230"
+_BTN_GRAY_HOVER = "#252b3b"
 
 
 class _NavItem(ctk.CTkFrame):
@@ -115,9 +115,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self.title("Manage Saved Paths")
         self.geometry("500x440")
         self.resizable(False, False)
-        self.configure(fg_color="#050a14")
-        self.grab_set()
-        self.focus_force()
+        self.configure(fg_color="#0f1117")
 
         self.on_change = on_change
         self.paths: List[str] = list(saved_paths)
@@ -126,7 +124,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self.grid_columnconfigure(0, weight=1)
 
         # ── Header ────────────────────────────────────────────────────────────
-        header = ctk.CTkFrame(self, fg_color="#080e1c", corner_radius=0, height=52)
+        header = ctk.CTkFrame(self, fg_color="#141824", corner_radius=0, height=52)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
         header.grid_columnconfigure(0, weight=1)
@@ -141,7 +139,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
 
         # ── Path list ─────────────────────────────────────────────────────────
         list_frame = ctk.CTkScrollableFrame(
-            self, fg_color="transparent", scrollbar_button_color="#1a2035"
+            self, fg_color="transparent", scrollbar_button_color="#1e2540"
         )
         list_frame.grid(row=1, column=0, sticky="nsew", padx=16, pady=(12, 0))
         list_frame.grid_columnconfigure(0, weight=1)
@@ -151,7 +149,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self._rebuild_list()
 
         # ── Add new path ──────────────────────────────────────────────────────
-        add_frame = ctk.CTkFrame(self, fg_color="#080e1c", corner_radius=0, height=70)
+        add_frame = ctk.CTkFrame(self, fg_color="#141824", corner_radius=0, height=70)
         add_frame.grid(row=2, column=0, sticky="ew")
         add_frame.grid_propagate(False)
         add_frame.grid_rowconfigure(0, weight=1)
@@ -160,10 +158,10 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self.entry = ctk.CTkEntry(
             add_frame,
             placeholder_text="  /sdcard/YourFolder/",
-            fg_color="#0b1324",
-            border_color="#1e2d45",
+            fg_color="#151929",
+            border_color="#1e2540",
             text_color="#e8edf5",
-            placeholder_text_color="#3a4d66",
+            placeholder_text_color="#4a5070",
             font=ctk.CTkFont(size=13),
             height=38,
             corner_radius=8,
@@ -194,7 +192,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
                 self.list_frame,
                 text="No saved paths yet.\nAdd one below ↓",
                 font=ctk.CTkFont(size=13),
-                text_color="#2a3448",
+                text_color="#4a5070",
                 justify="center",
             ).grid(row=0, column=0, pady=32)
             return
@@ -202,10 +200,10 @@ class PathsManagerDialog(ctk.CTkToplevel):
         for i, path in enumerate(self.paths):
             row = ctk.CTkFrame(
                 self.list_frame,
-                fg_color="#080e1c",
+                fg_color="#151929",
                 corner_radius=8,
                 border_width=1,
-                border_color="#111d30",
+                border_color="#1e2540",
             )
             row.grid(row=i, column=0, sticky="ew", pady=4)
             row.grid_columnconfigure(0, weight=1)
@@ -339,11 +337,11 @@ class Sidebar(ctk.CTkFrame):
             saved_block,
             values=opts,
             command=self._on_saved_path_select,
-            fg_color="#080e1c",
-            button_color="#111d30",
-            button_hover_color="#1a2d48",
-            dropdown_fg_color="#080e1c",
-            text_color="#8896b0",
+            fg_color="#141824",
+            button_color="#1e2540",
+            button_hover_color="#2d3558",
+            dropdown_fg_color="#141824",
+            text_color="#a0a8c0",
             font=ctk.CTkFont(size=12),
             corner_radius=8,
             height=34,

@@ -7,15 +7,15 @@ from typing import List, Callable, Dict
 from core.adb_client import FileInfo, pull_file
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
-_CARD_BG = "#080b11"
-_CARD_BG_HOVER = "#0e131d"
-_CARD_BG_SELECTED = "#121a2b"
-_CARD_BORDER = "#141a29"
-_CARD_BORDER_HOVER = "#1d263b"
+_CARD_BG = "#151929"
+_CARD_BG_HOVER = "#1a1f30"
+_CARD_BG_SELECTED = "#172554"
+_CARD_BORDER = "#1e2540"
+_CARD_BORDER_HOVER = "#2d3558"
 _CARD_BORDER_SELECTED = "#2563eb"
-_CARD_BORDER_SELECTED_HOVER = "#3b82f6"
-_THUMB_BG = "#0f1522"
-_THUMB_IMG_BG = "#05070a"
+_CARD_BORDER_SELECTED_HOVER = "#60a5fa"
+_THUMB_BG = "#1e2540"
+_THUMB_IMG_BG = "#111827"
 _EXT_COLORS = {
     "mp4": "#7c3aed",
     "mov": "#7c3aed",
@@ -373,7 +373,7 @@ class FileExplorer(ctk.CTkFrame):
             text=f"{size_str}  ·  {date_str}",
             anchor="w",
             font=ctk.CTkFont(size=11),
-            text_color="#4c5a75",
+            text_color="#6b7280",
         )
         meta_lbl.grid(row=1, column=0, sticky="ew")
 
@@ -384,9 +384,9 @@ class FileExplorer(ctk.CTkFrame):
             text="Preview",
             width=68,
             height=30,
-            fg_color="#0f1a2e",
-            hover_color="#162540",
-            text_color="#6a7f9e",
+            fg_color="#1e2540",
+            hover_color="#2d3558",
+            text_color="#60a5fa",
             font=ctk.CTkFont(size=11, weight="bold"),
             corner_radius=6,
             command=lambda p=full_path: self.on_preview(p),

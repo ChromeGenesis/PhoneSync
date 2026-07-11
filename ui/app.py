@@ -23,45 +23,36 @@ try:
 except ImportError:
     pass
 
-# ── Color palettes ────────────────────────────────────────────────────────────
-_DARK = {
-    "app_bg": "#000000",
-    "main_bg": "#060810",
-    "surface": "#09101e",
-    "border": "#111d30",
-}
-_LIGHT = {
-    "app_bg": "#f0f4f8",
-    "main_bg": "#e8ecf2",
-    "surface": "#ffffff",
-    "border": "#d1d9e6",
-}
+# ── Design tokens ─────────────────────────────────────────────────────────────
+_APP_BG = "#000000"
+_MAIN_BG = "#000000"
+_SURFACE = "#000000"
+_BORDER = "#141a29"
 
-_TEXT_PRIMARY = ("#0f172a", "#dde4f0")
-_TEXT_MUTED = ("#64748b", "#48566e")
+_TEXT_PRIMARY = "#dde4f0"
+_TEXT_MUTED = "#4c5a75"
 _ACCENT = "#3b82f6"
 _GREEN = "#16a34a"
 _GREEN_HOVER = "#15803d"
 _RED = "#ef4444"
 _AMBER = "#f59e0b"
 
-# Pull button: adaptive tuples
-_PULL_FG = ("#e0f2fe", "#1e3a5f")
-_PULL_HOVER = ("#bae6fd", "#1e4976")
-_PULL_TEXT = ("#0284c7", "#7dd3fc")
+# Pull button colors
+_PULL_FG = "#1e3a5f"
+_PULL_HOVER = "#1e4976"
+_PULL_TEXT = "#7dd3fc"
 
 
 class PhoneSyncApp(ctk.CTk):
     def __init__(self):
         super().__init__(className="PhoneSync")
-        self._dark_mode = True
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("blue")
 
         self.title("PhoneSync")
         self.geometry("1180x780")
         self.minsize(900, 600)
-        self.configure(fg_color=_DARK["app_bg"])
+        self.configure(fg_color=_APP_BG)
 
         # ── Taskbar icon ──────────────────────────────────────────────────────
         try:
@@ -102,14 +93,14 @@ class PhoneSyncApp(ctk.CTk):
         self.sidebar.grid(row=0, column=0, sticky="nsew")
 
         # ── Main content area ─────────────────────────────────────────────────
-        self.main_frame = ctk.CTkFrame(self, fg_color=_DARK["main_bg"], corner_radius=0)
+        self.main_frame = ctk.CTkFrame(self, fg_color=_MAIN_BG, corner_radius=0)
         self.main_frame.grid(row=0, column=1, sticky="nsew")
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
         # ── Header bar ────────────────────────────────────────────────────────
         self._header = ctk.CTkFrame(
-            self.main_frame, fg_color=_DARK["surface"], corner_radius=0, height=60
+            self.main_frame, fg_color=_SURFACE, corner_radius=0, height=60
         )
         self._header.grid(row=0, column=0, sticky="ew")
         self._header.grid_propagate(False)
@@ -154,32 +145,17 @@ class PhoneSyncApp(ctk.CTk):
             text="\u27f3  Refresh",
             width=92,
             height=32,
-            fg_color=("#e2e8f0", "#0f1a2e"),
-            hover_color=("#cbd5e1", "#162540"),
-            text_color=("#475569", "#6a7f9e"),
+            fg_color="#0f1a2e",
+            hover_color="#162540",
+            text_color="#6a7f9e",
             font=ctk.CTkFont(size=12),
             corner_radius=8,
             command=self._refresh,
         )
-        self.btn_refresh.pack(side="left", padx=(0, 8))
+        self.btn_refresh.pack(side="left")
 
-        # Theme toggle (sun = dark mode active; moon = light mode active)
-        self.btn_theme = ctk.CTkButton(
-            right_group,
-            text="\u2600",
-            width=36,
-            height=32,
-            fg_color=("#e2e8f0", "#0f1a2e"),
-            hover_color=("#cbd5e1", "#162540"),
-            text_color=("#475569", "#6a7f9e"),
-            font=ctk.CTkFont(size=14),
-            corner_radius=8,
-            command=self._toggle_theme,
-        )
-        self.btn_theme.pack(side="left")
-
-        # Header bottom border (adaptive)
-        ctk.CTkFrame(self.main_frame, fg_color=("#e2e8f0", "#111d30"), height=1).grid(
+        # Header bottom border
+        ctk.CTkFrame(self.main_frame, fg_color=_BORDER, height=1).grid(
             row=0, column=0, sticky="sew"
         )
 
@@ -199,15 +175,15 @@ class PhoneSyncApp(ctk.CTk):
 
         # ── Bottom action bar ─────────────────────────────────────────────────
         self._action_bar = ctk.CTkFrame(
-            self.main_frame, fg_color=_DARK["surface"], corner_radius=0, height=68
+            self.main_frame, fg_color=_SURFACE, corner_radius=0, height=68
         )
         self._action_bar.grid(row=2, column=0, sticky="ew")
         self._action_bar.grid_propagate(False)
         self._action_bar.grid_rowconfigure(0, weight=1)
         self._action_bar.grid_columnconfigure(1, weight=1)
 
-        # Top border (adaptive)
-        ctk.CTkFrame(self._action_bar, fg_color=("#e2e8f0", "#111d30"), height=1).grid(
+        # Top border
+        ctk.CTkFrame(self._action_bar, fg_color=_BORDER, height=1).grid(
             row=0, column=0, columnspan=3, sticky="new"
         )
 
@@ -249,21 +225,6 @@ class PhoneSyncApp(ctk.CTk):
         # ── Boot ──────────────────────────────────────────────────────────────
         threading.Thread(target=self._init_adb, daemon=True).start()
         self._start_background_sync()
-
-    # ── Theme ─────────────────────────────────────────────────────────────────
-    def _toggle_theme(self):
-        self._dark_mode = not self._dark_mode
-        mode = "dark" if self._dark_mode else "light"
-        ctk.set_appearance_mode(mode)
-        # Sun = currently dark; Moon = currently light
-        self.btn_theme.configure(text="\u2600" if self._dark_mode else "\U0001f319")
-        palette = _DARK if self._dark_mode else _LIGHT
-        self.configure(fg_color=palette["app_bg"])
-        self.main_frame.configure(fg_color=palette["main_bg"])
-        self._header.configure(fg_color=palette["surface"])
-        self._action_bar.configure(fg_color=palette["surface"])
-        if self.current_remote_path:
-            self.load_path(self.current_remote_path)
 
     # ── Connection ────────────────────────────────────────────────────────────
     def _init_adb(self):

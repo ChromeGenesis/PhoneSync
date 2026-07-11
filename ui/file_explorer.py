@@ -7,15 +7,15 @@ from typing import List, Callable, Dict
 from core.adb_client import FileInfo, pull_file
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
-_CARD_BG = ("#ffffff", "#05080f")
-_CARD_BG_HOVER = ("#f8fafc", "#090d18")
-_CARD_BG_SELECTED = ("#f0f9ff", "#0c1a36")
-_CARD_BORDER = ("#e2e8f0", "#111d30")
-_CARD_BORDER_HOVER = ("#cbd5e1", "#1a2d48")
-_CARD_BORDER_SELECTED = ("#3b82f6", "#2563eb")
-_CARD_BORDER_SELECTED_HOVER = ("#60a5fa", "#60a5fa")
-_THUMB_BG = ("#f1f5f9", "#0d1524")
-_THUMB_IMG_BG = ("#e2e8f0", "#080c14")
+_CARD_BG = "#080b11"
+_CARD_BG_HOVER = "#0e131d"
+_CARD_BG_SELECTED = "#121a2b"
+_CARD_BORDER = "#141a29"
+_CARD_BORDER_HOVER = "#1d263b"
+_CARD_BORDER_SELECTED = "#2563eb"
+_CARD_BORDER_SELECTED_HOVER = "#3b82f6"
+_THUMB_BG = "#0f1522"
+_THUMB_IMG_BG = "#05070a"
 _EXT_COLORS = {
     "mp4": "#7c3aed",
     "mov": "#7c3aed",
@@ -361,7 +361,7 @@ class FileExplorer(ctk.CTkFrame):
             text=f_name,
             anchor="w",
             font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=("#1e293b", "#dde4f0"),
+            text_color="#dde4f0",
             wraplength=0,
         )
         name_lbl.grid(row=0, column=0, sticky="ew")
@@ -373,7 +373,7 @@ class FileExplorer(ctk.CTkFrame):
             text=f"{size_str}  ·  {date_str}",
             anchor="w",
             font=ctk.CTkFont(size=11),
-            text_color=("#64748b", "#3d4f6a"),
+            text_color="#4c5a75",
         )
         meta_lbl.grid(row=1, column=0, sticky="ew")
 
@@ -384,9 +384,9 @@ class FileExplorer(ctk.CTkFrame):
             text="Preview",
             width=68,
             height=30,
-            fg_color=("#e0f2fe", "#0b1830"),
-            hover_color=("#bae6fd", "#112240"),
-            text_color=("#0284c7", "#4d8fcc"),
+            fg_color="#0f1a2e",
+            hover_color="#162540",
+            text_color="#6a7f9e",
             font=ctk.CTkFont(size=11, weight="bold"),
             corner_radius=6,
             command=lambda p=full_path: self.on_preview(p),

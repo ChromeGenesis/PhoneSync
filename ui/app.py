@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import tempfile
 import subprocess
@@ -50,9 +51,17 @@ class PhoneSyncApp(ctk.CTk):
         ctk.set_default_color_theme("blue")
 
         self.title("PhoneSync")
-        self.geometry("1180x780")
         self.minsize(900, 600)
         self.configure(fg_color=_APP_BG)
+        
+        # Center the window on the screen
+        window_width = 1050
+        window_height = 670
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x_cordinate = int((screen_width / 2) - (window_width / 2))
+        y_cordinate = int((screen_height / 2) - (window_height / 2))
+        self.geometry(f"{window_width}x{window_height}+{x_cordinate}+{y_cordinate}")
 
         # ── Taskbar icon ──────────────────────────────────────────────────────
         try:
@@ -389,34 +398,36 @@ class PhoneSyncApp(ctk.CTk):
 
     # ── File pickers ──────────────────────────────────────────────────────────
     def _zenity_askopenfilenames(self, title: str):
-        try:
-            res = subprocess.run(
-                [
-                    "zenity",
-                    "--file-selection",
-                    "--multiple",
-                    "--separator=|",
-                    f"--title={title}",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip().split("|")
-        except Exception:
-            pass
+        if sys.platform.startswith("linux"):
+            try:
+                res = subprocess.run(
+                    [
+                        "zenity",
+                        "--file-selection",
+                        "--multiple",
+                        "--separator=|",
+                        f"--title={title}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    return res.stdout.strip().split("|")
+            except Exception:
+                pass
         return filedialog.askopenfilenames(title=title)
 
     def _zenity_askdirectory(self, title: str, initialdir):
-        try:
-            cmd = ["zenity", "--file-selection", "--directory", f"--title={title}"]
-            if initialdir:
-                cmd.append(f"--filename={initialdir}/")
-            res = subprocess.run(cmd, capture_output=True, text=True)
-            if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip()
-        except Exception:
-            pass
+        if sys.platform.startswith("linux"):
+            try:
+                cmd = ["zenity", "--file-selection", "--directory", f"--title={title}"]
+                if initialdir:
+                    cmd.append(f"--filename={initialdir}/")
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                if res.returncode == 0 and res.stdout.strip():
+                    return res.stdout.strip()
+            except Exception:
+                pass
         return filedialog.askdirectory(title=title, initialdir=initialdir)
 
     # ── Tray ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Vibrant modern gradient -->
+    <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    
+    <!-- Mask for cutout effect -->
+    <mask id="cutout-mask">
+      <!-- Base shape: solid white keeps everything -->
+      <rect width="512" height="512" fill="white" rx="112" />
+      
+      <!-- Phone body cutout (black removes from gradient) -->
+      <rect x="156" y="76" width="200" height="360" rx="32" fill="black" />
+      
+      <!-- Inside phone: screen elements (white adds back to gradient) -->
+      <!-- Screen boundary -->
+      <rect x="172" y="92" width="168" height="328" rx="20" fill="white" />
+      
+      <!-- Cutout arrows inside screen (black removes from gradient) -->
+      <path d="M256 184 A 56 56 0 0 1 312 240 L 292 240 L 324 280 L 356 240 L 336 240 A 80 80 0 0 0 176 240 L 200 240 A 56 56 0 0 1 256 184 Z" fill="black" />
+      <path d="M256 328 A 56 56 0 0 1 200 272 L 220 272 L 188 232 L 156 272 L 176 272 A 80 80 0 0 0 336 272 L 312 272 A 56 56 0 0 1 256 328 Z" fill="black" />
+    </mask>
+
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- The main app icon block -->
+  <!-- A drop shadow on the bounding box for some depth -->
+  <rect width="512" height="512" fill="url(#brand-grad)" rx="112" filter="url(#shadow)" mask="url(#cutout-mask)" />
+  
+  <!-- Inner camera notch cutout -->
+  <rect x="220" y="96" width="72" height="20" rx="10" fill="url(#brand-grad)" />
+</svg>

@@ -77,6 +77,7 @@ class ImagePreviewWindow(ctk.CTkToplevel):
                     capture_output=True,
                 )
             img = Image.open(local_file)
+            img.load()
             if img.mode not in ("RGB", "RGBA"):
                 img = img.convert("RGBA")
             self.pil_image = img
@@ -197,15 +198,16 @@ class ImagePreviewWindow(ctk.CTkToplevel):
         self.canvas.bind("<Button-5>", self._on_mouse_wheel)  # Linux scroll down
         self.canvas.bind("<Configure>", self._on_canvas_resize)
 
+        self.update_idletasks()
         self._calculate_fit_scale()
         self.zoom_level = self.fit_scale
         self.redraw()
 
     def _calculate_fit_scale(self) -> None:
-        if self.pil_image is None:
+        if self.pil_image is None or not hasattr(self, "canvas"):
             return
-        cw = max(self.canvas.winfo_width(), 100)
-        ch = max(self.canvas.winfo_height(), 100)
+        cw = max(self.canvas.winfo_width(), self.winfo_width(), 400)
+        ch = max(self.canvas.winfo_height(), self.winfo_height() - 60, 400)
         iw, ih = self.pil_image.size
         scale_w = cw / iw
         scale_h = ch / ih
@@ -287,6 +289,7 @@ class ImagePreviewWindow(ctk.CTkToplevel):
         cw = self.canvas.winfo_width()
         ch = self.canvas.winfo_height()
         if cw < 10 or ch < 10:
+            self.after(40, self.redraw)
             return
 
         iw, ih = self.pil_image.size

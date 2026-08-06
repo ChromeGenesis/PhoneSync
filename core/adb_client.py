@@ -169,3 +169,35 @@ def push_file(local_path: str, remote_path: str) -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
+
+def get_sdcard_subdirs() -> List[str]:
+    """Fetch 1st-level directories under /sdcard/ on the connected phone."""
+    try:
+        res = subprocess.run(
+            ["adb", "shell", "ls -d /sdcard/*/ 2>/dev/null"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            dirs = []
+            for line in res.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("/sdcard/") and line.endswith("/"):
+                    dirs.append(line)
+            if dirs:
+                return sorted(dirs)
+    except Exception:
+        pass
+    
+    return [
+        "/sdcard/DCIM/",
+        "/sdcard/Download/",
+        "/sdcard/Pictures/",
+        "/sdcard/Music/",
+        "/sdcard/Movies/",
+        "/sdcard/Documents/",
+        "/sdcard/WhatsApp/",
+        "/sdcard/Android/"
+    ]
+

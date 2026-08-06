@@ -12,6 +12,7 @@ from core.adb_client import (
     get_device_name,
     list_files_stream,
     list_recents_stream,
+    get_sdcard_subdirs,
 )
 from core.config import load_saved_paths, save_custom_path
 from ui.sidebar import Sidebar
@@ -63,7 +64,7 @@ class PhoneSyncApp(ctk.CTk):
         y_cordinate = int((screen_height / 2) - (window_height / 2))
         self.geometry(f"{window_width}x{window_height}+{x_cordinate}+{y_cordinate}")
 
-        # ── Taskbar icon ──────────────────────────────────────────────────────
+        # ── Taskbar icon & close protocol ─────────────────────────────────────
         try:
             self.wm_class("PhoneSync", "PhoneSync")
             from PIL import ImageTk, Image as PILImage
@@ -73,7 +74,13 @@ class PhoneSyncApp(ctk.CTk):
         except Exception:
             pass
 
-        self.protocol("WM_DELETE_WINDOW", self.hide_window)
+        self._ctrl_pressed = False
+        self.bind_all("<KeyPress-Control_L>", lambda e: setattr(self, "_ctrl_pressed", True))
+        self.bind_all("<KeyPress-Control_R>", lambda e: setattr(self, "_ctrl_pressed", True))
+        self.bind_all("<KeyRelease-Control_L>", lambda e: setattr(self, "_ctrl_pressed", False))
+        self.bind_all("<KeyRelease-Control_R>", lambda e: setattr(self, "_ctrl_pressed", False))
+
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         # ── Root grid: sidebar | main ─────────────────────────────────────────
         self.grid_rowconfigure(0, weight=1)
@@ -85,6 +92,10 @@ class PhoneSyncApp(ctk.CTk):
         self.device_name = ""
         self.is_connected = False
         self.current_remote_path = ""
+        self.sdcard_dirs = [
+            "/sdcard/DCIM/", "/sdcard/Download/", "/sdcard/Pictures/",
+            "/sdcard/Music/", "/sdcard/Movies/", "/sdcard/Documents/", "/sdcard/WhatsApp/"
+        ]
 
         self.saved_paths = load_saved_paths()
         self.pull_dest_dir = os.path.expanduser("~/Downloads")
@@ -265,6 +276,13 @@ class PhoneSyncApp(ctk.CTk):
         )
         self.load_path("/sdcard/DCIM/Screenshots/")
 
+        def _fetch_sdcard_dirs():
+            dirs = get_sdcard_subdirs()
+            if dirs:
+                self.sdcard_dirs = dirs
+
+        threading.Thread(target=_fetch_sdcard_dirs, daemon=True).start()
+
     def _start_background_sync(self):
         def _worker():
             import time
@@ -385,16 +403,24 @@ class PhoneSyncApp(ctk.CTk):
 
     # ── Custom path ───────────────────────────────────────────────────────────
     def _on_ask_custom_path(self):
-        dialog = ctk.CTkInputDialog(
-            text="Enter remote path (e.g., /sdcard/Movies/):", title="Custom Path"
-        )
-        path = dialog.get_input()
-        if path:
-            if not path.endswith("/"):
-                path += "/"
-            self.saved_paths = save_custom_path(path)
-            self.sidebar.update_saved_paths(self.saved_paths, path)
-            self.load_path(path)
+        self.sidebar._open_paths_manager()
+
+    # ── Tray & Close ──────────────────────────────────────────────────────────
+    def _on_window_close(self):
+        is_ctrl = getattr(self, "_ctrl_pressed", False)
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                # VK_CONTROL = 0x11
+                if ctypes.windll.user32.GetKeyState(0x11) & 0x8000:
+                    is_ctrl = True
+            except Exception:
+                pass
+
+        if is_ctrl:
+            self.quit_app(None, None)
+        else:
+            self.hide_window()
 
     # ── File pickers ──────────────────────────────────────────────────────────
     def _zenity_askopenfilenames(self, title: str):

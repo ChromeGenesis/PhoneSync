@@ -55,7 +55,7 @@ class ImagePreviewWindow(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14),
             text_color=_TEXT_MUTED,
         )
-        self.spinner.grid(row=0, column=0, sticky="center")
+        self.spinner.place(relx=0.5, rely=0.5, anchor="center")
 
         # Fetch image in background thread
         threading.Thread(target=self._fetch_and_load, daemon=True).start()
@@ -71,8 +71,11 @@ class ImagePreviewWindow(ctk.CTkToplevel):
         local_file = os.path.join(self.temp_dir, self.filename)
         try:
             if not os.path.exists(local_file):
+                remote_src = self.full_remote_path
+                if not remote_src.startswith("/"):
+                    remote_src = f"/sdcard/{remote_src}"
                 subprocess.run(
-                    ["adb", "pull", self.full_remote_path, local_file],
+                    ["adb", "pull", remote_src, local_file],
                     check=True,
                     capture_output=True,
                 )
@@ -123,7 +126,6 @@ class ImagePreviewWindow(ctk.CTkToplevel):
             height=44,
         )
         toolbar.grid(row=1, column=0, pady=(0, 14), padx=20)
-        toolbar.grid_propagate(False)
 
         btn_out = ctk.CTkButton(
             toolbar,

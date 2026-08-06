@@ -1,6 +1,8 @@
+from collections.abc import Callable
+
 import customtkinter as ctk
-from typing import Callable, List
-from core.config import load_saved_paths, save_custom_path, delete_saved_path
+
+from core.config import delete_saved_path, save_custom_path
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
 _SIDEBAR_BG = "#0f1117"
@@ -110,7 +112,13 @@ def _action_btn(
 class PathsManagerDialog(ctk.CTkToplevel):
     """Modal dialog for managing saved custom paths (add / delete) with phone folder auto-suggestions."""
 
-    def __init__(self, master, saved_paths: List[str], on_change: Callable, discovered_paths: List[str] | None = None):
+    def __init__(
+        self,
+        master,
+        saved_paths: list[str],
+        on_change: Callable,
+        discovered_paths: list[str] | None = None,
+    ):
         super().__init__(master)
         self.title("Manage Saved Paths")
         self.geometry("540x520")
@@ -118,11 +126,20 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self.configure(fg_color="#0f1117")
 
         self.on_change = on_change
-        self.paths: List[str] = list(saved_paths)
-        self.discovered_paths: List[str] = list(discovered_paths) if discovered_paths else [
-            "/sdcard/DCIM/", "/sdcard/Download/", "/sdcard/Pictures/",
-            "/sdcard/Music/", "/sdcard/Movies/", "/sdcard/Documents/", "/sdcard/WhatsApp/"
-        ]
+        self.paths: list[str] = list(saved_paths)
+        self.discovered_paths: list[str] = (
+            list(discovered_paths)
+            if discovered_paths
+            else [
+                "/sdcard/DCIM/",
+                "/sdcard/Download/",
+                "/sdcard/Pictures/",
+                "/sdcard/Music/",
+                "/sdcard/Movies/",
+                "/sdcard/Documents/",
+                "/sdcard/WhatsApp/",
+            ]
+        )
 
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -152,7 +169,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
         _Section(self.main_scroll, "Detected Phone Folders (/sdcard/)").grid(
             row=0, column=0, sticky="w", pady=(4, 6)
         )
-        
+
         disc_frame = ctk.CTkFrame(self.main_scroll, fg_color="#141824", corner_radius=8)
         disc_frame.grid(row=1, column=0, sticky="ew", pady=(0, 16))
         disc_frame.grid_columnconfigure(0, weight=1)
@@ -191,7 +208,7 @@ class PathsManagerDialog(ctk.CTkToplevel):
         self.list_frame.grid(row=3, column=0, sticky="ew")
         self.list_frame.grid_columnconfigure(0, weight=1)
 
-        self._row_widgets: List[dict] = []
+        self._row_widgets: list[dict] = []
         self._rebuild_list()
 
         # ── Add new path footer ───────────────────────────────────────────────
@@ -316,7 +333,7 @@ class Sidebar(ctk.CTkFrame):
         on_path_select: Callable[[str], None],
         on_push_file: Callable[[], None],
         on_push_folder: Callable[[], None],
-        saved_paths: List[str],
+        saved_paths: list[str],
         on_ask_custom_path: Callable[[], None],
         on_change_dest: Callable[[], None],
     ):
@@ -328,7 +345,7 @@ class Sidebar(ctk.CTkFrame):
         self.on_path_select = on_path_select
         self._nav_items: dict[str, _NavItem] = {}
         self._active_key = ""
-        self._saved_paths: List[str] = list(saved_paths)
+        self._saved_paths: list[str] = list(saved_paths)
         self._master = master
 
         # ── Logo ──────────────────────────────────────────────────────────────
@@ -369,7 +386,9 @@ class Sidebar(ctk.CTkFrame):
         ]
         for i, (key, icon, label, path) in enumerate(nav_defs):
             cmd = (
-                (lambda p=path: self._nav_click(key, p)) if path else on_ask_custom_path
+                (lambda k=key, p=path: self._nav_click(k, p))
+                if path
+                else on_ask_custom_path
             )
             item = _NavItem(scroll, icon, label, cmd)
             item.grid(row=1 + i, column=0, sticky="ew", padx=4, pady=1)
@@ -481,7 +500,7 @@ class Sidebar(ctk.CTkFrame):
             self._set_active("")
             self.on_path_select(path)
 
-    def update_saved_paths(self, new_paths: List[str], current_path: str | None):
+    def update_saved_paths(self, new_paths: list[str], current_path: str | None):
         self._saved_paths = list(new_paths)
         opts = new_paths if new_paths else ["No saved paths"]
         self.saved_paths_menu.configure(values=opts)
@@ -500,6 +519,5 @@ class Sidebar(ctk.CTkFrame):
         )
         dlg.transient(self._master)
 
-    def _on_paths_changed(self, new_paths: List[str], last_added: str | None):
+    def _on_paths_changed(self, new_paths: list[str], last_added: str | None):
         self.update_saved_paths(new_paths, last_added)
-

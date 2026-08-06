@@ -1,9 +1,11 @@
 import os
-import threading
 import queue
+import threading
+from collections.abc import Callable
+
 import customtkinter as ctk
 from PIL import Image
-from typing import List, Callable, Dict
+
 from core.adb_client import FileInfo, pull_file
 
 # ── Design tokens ─────────────────────────────────────────────────────────────
@@ -120,13 +122,13 @@ class FileExplorer(ctk.CTkFrame):
         self.on_preview = on_preview
         self.on_selection_change = on_selection_change
 
-        self.files: List[FileInfo] = []
+        self.files: list[FileInfo] = []
         self.remote_base_path = ""
-        self.checkboxes: Dict[str, ctk.StringVar] = {}
-        self.thumbnail_labels: Dict[str, ctk.CTkLabel] = {}
-        self.file_widgets: Dict[str, dict] = {}
-        self.header_widgets: List[ctk.CTkLabel] = []
-        self._f_info_map: Dict[str, FileInfo] = {}
+        self.checkboxes: dict[str, ctk.StringVar] = {}
+        self.thumbnail_labels: dict[str, ctk.CTkLabel] = {}
+        self.file_widgets: dict[str, dict] = {}
+        self.header_widgets: list[ctk.CTkLabel] = []
+        self._f_info_map: dict[str, FileInfo] = {}
 
         self.page = 0
         self.page_size = 50
@@ -454,7 +456,7 @@ class FileExplorer(ctk.CTkFrame):
         self.page = 0
         self._render()
 
-    def _sorted_files(self) -> List[FileInfo]:
+    def _sorted_files(self) -> list[FileInfo]:
         v = self.sort_var.get()
         if v == "Date (Newest)":
             return sorted(self.files, key=lambda x: x["mod_time"], reverse=True)
@@ -466,7 +468,7 @@ class FileExplorer(ctk.CTkFrame):
             return sorted(self.files, key=lambda x: x["size"], reverse=True)
         return list(self.files)
 
-    def _grouped(self, files: List[FileInfo]) -> dict:
+    def _grouped(self, files: list[FileInfo]) -> dict:
         g_val = self.group_var.get()
         groups: dict = {}
         if g_val == "None":
@@ -482,7 +484,7 @@ class FileExplorer(ctk.CTkFrame):
         return groups
 
     def _build_render_queue(
-        self, sorted_files: List[FileInfo], start: int, end: int
+        self, sorted_files: list[FileInfo], start: int, end: int
     ) -> list:
         paginated = sorted_files[start:end]
         groups = self._grouped(paginated)
@@ -601,7 +603,7 @@ class FileExplorer(ctk.CTkFrame):
         else:
             self._is_rendering = False
 
-    def _incremental_render(self, new_files: List[FileInfo]):
+    def _incremental_render(self, new_files: list[FileInfo]):
         g_val = self.group_var.get()
         items = []
         for f in new_files:
@@ -620,14 +622,14 @@ class FileExplorer(ctk.CTkFrame):
             self._process_render_queue()
 
     # ── Public API ────────────────────────────────────────────────────────────
-    def set_files(self, files: List[FileInfo], remote_base_path: str):
+    def set_files(self, files: list[FileInfo], remote_base_path: str):
         self.files = files
         self.remote_base_path = remote_base_path
         self._f_info_map = {f["name"]: f for f in files}
         self.page = 0
         self._render()
 
-    def update_files(self, new_files: List[FileInfo], remote_base_path: str):
+    def update_files(self, new_files: list[FileInfo], remote_base_path: str):
         self.files = new_files
         self.remote_base_path = remote_base_path
         self._f_info_map = {f["name"]: f for f in new_files}
@@ -694,7 +696,7 @@ class FileExplorer(ctk.CTkFrame):
             self.btn_load_more.grid(row=row, column=0, pady=12, padx=4, sticky="ew")
             self._bind_scrolling(self.btn_load_more)
 
-    def append_files(self, new_files: List[FileInfo], remote_base_path: str):
+    def append_files(self, new_files: list[FileInfo], remote_base_path: str):
         self.remote_base_path = remote_base_path
         self.files.extend(new_files)
         for f in new_files:
@@ -723,7 +725,7 @@ class FileExplorer(ctk.CTkFrame):
                 self.file_widgets[n]["update_style"](False)
         self.on_selection_change()
 
-    def get_selected_files(self) -> List[str]:
+    def get_selected_files(self) -> list[str]:
         selected = []
         for n, var in self.checkboxes.items():
             if var.get() == "on":

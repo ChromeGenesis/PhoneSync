@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 CONFIG_FILE = os.path.expanduser("~/.config/phone_sync_paths.json")
 

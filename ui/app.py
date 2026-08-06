@@ -1,22 +1,23 @@
 import os
-import sys
-import threading
-import tempfile
 import subprocess
-import customtkinter as ctk
+import sys
+import tempfile
+import threading
 from tkinter import filedialog
+
+import customtkinter as ctk
 from PIL import Image
 
 from core.adb_client import (
     auto_connect,
     get_device_name,
+    get_sdcard_subdirs,
     list_files_stream,
     list_recents_stream,
-    get_sdcard_subdirs,
 )
-from core.config import load_saved_paths, save_custom_path
-from ui.sidebar import Sidebar
+from core.config import load_saved_paths
 from ui.file_explorer import FileExplorer
+from ui.sidebar import Sidebar
 
 try:
     import pillow_heif
@@ -54,7 +55,7 @@ class PhoneSyncApp(ctk.CTk):
         self.title("PhoneSync")
         self.minsize(900, 600)
         self.configure(fg_color=_APP_BG)
-        
+
         # Center the window on the screen
         window_width = 1050
         window_height = 670
@@ -67,7 +68,8 @@ class PhoneSyncApp(ctk.CTk):
         # ── Taskbar icon & close protocol ─────────────────────────────────────
         try:
             self.wm_class("PhoneSync", "PhoneSync")
-            from PIL import ImageTk, Image as PILImage
+            from PIL import Image as PILImage
+            from PIL import ImageTk
 
             if os.path.exists("icon.png"):
                 self.iconphoto(True, ImageTk.PhotoImage(PILImage.open("icon.png")))
@@ -75,10 +77,18 @@ class PhoneSyncApp(ctk.CTk):
             pass
 
         self._ctrl_pressed = False
-        self.bind_all("<KeyPress-Control_L>", lambda e: setattr(self, "_ctrl_pressed", True))
-        self.bind_all("<KeyPress-Control_R>", lambda e: setattr(self, "_ctrl_pressed", True))
-        self.bind_all("<KeyRelease-Control_L>", lambda e: setattr(self, "_ctrl_pressed", False))
-        self.bind_all("<KeyRelease-Control_R>", lambda e: setattr(self, "_ctrl_pressed", False))
+        self.bind_all(
+            "<KeyPress-Control_L>", lambda e: setattr(self, "_ctrl_pressed", True)
+        )
+        self.bind_all(
+            "<KeyPress-Control_R>", lambda e: setattr(self, "_ctrl_pressed", True)
+        )
+        self.bind_all(
+            "<KeyRelease-Control_L>", lambda e: setattr(self, "_ctrl_pressed", False)
+        )
+        self.bind_all(
+            "<KeyRelease-Control_R>", lambda e: setattr(self, "_ctrl_pressed", False)
+        )
 
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -93,8 +103,13 @@ class PhoneSyncApp(ctk.CTk):
         self.is_connected = False
         self.current_remote_path = ""
         self.sdcard_dirs = [
-            "/sdcard/DCIM/", "/sdcard/Download/", "/sdcard/Pictures/",
-            "/sdcard/Music/", "/sdcard/Movies/", "/sdcard/Documents/", "/sdcard/WhatsApp/"
+            "/sdcard/DCIM/",
+            "/sdcard/Download/",
+            "/sdcard/Pictures/",
+            "/sdcard/Music/",
+            "/sdcard/Movies/",
+            "/sdcard/Documents/",
+            "/sdcard/WhatsApp/",
         ]
 
         self.saved_paths = load_saved_paths()
@@ -411,6 +426,7 @@ class PhoneSyncApp(ctk.CTk):
         if sys.platform == "win32":
             try:
                 import ctypes
+
                 # VK_CONTROL = 0x11
                 if ctypes.windll.user32.GetKeyState(0x11) & 0x8000:
                     is_ctrl = True
@@ -653,43 +669,6 @@ class PhoneSyncApp(ctk.CTk):
 
     # ── Preview ───────────────────────────────────────────────────────────────
     def _show_preview(self, full_remote_path: str):
-        filename = full_remote_path.split("/")[-1]
-        local_file = os.path.join(self.temp_dir, filename)
+        from ui.preview import show_file_preview
 
-        prev_win = ctk.CTkToplevel(self)
-        prev_win.title(f"Preview \u2014 {filename}")
-        prev_win.geometry("640x640")
-        prev_win.configure(fg_color=_DARK["main_bg"])
-
-        spinner = ctk.CTkLabel(
-            prev_win,
-            text="Fetching preview\u2026",
-            font=ctk.CTkFont(size=14),
-            text_color=_TEXT_MUTED,
-        )
-        spinner.pack(expand=True)
-
-        def _pull_and_show():
-            try:
-                if not os.path.exists(local_file):
-                    subprocess.run(
-                        ["adb", "pull", full_remote_path, local_file],
-                        check=True,
-                        capture_output=True,
-                    )
-                img = Image.open(local_file)
-                img.thumbnail((600, 600), Image.Resampling.LANCZOS)
-                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
-                self.after(0, lambda: _show_img(ctk_img))
-            except Exception as e:
-                self.after(
-                    0, lambda: spinner.configure(text=f"Preview unavailable\n{e}")
-                )
-
-        def _show_img(ctk_img):
-            spinner.destroy()
-            ctk.CTkLabel(prev_win, text="", image=ctk_img).pack(
-                expand=True, padx=16, pady=16
-            )
-
-        threading.Thread(target=_pull_and_show, daemon=True).start()
+        show_file_preview(self, full_remote_path, self.temp_dir)

@@ -4,9 +4,10 @@ import sys
 _original_run = subprocess.run
 _original_popen = subprocess.Popen
 
+
 def patch_subprocess():
     """
-    Monkey-patch subprocess on Windows to append CREATE_NO_WINDOW 
+    Monkey-patch subprocess on Windows to append CREATE_NO_WINDOW
     to prevent command prompt spamming.
     """
     if sys.platform == "win32":

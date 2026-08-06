@@ -1,11 +1,13 @@
-import time
 import sys
+import time
+
 from core.adb_client import list_files_stream
+
 
 def test_stream():
     start = time.time()
     first_chunk_time = None
-    
+
     def on_chunk(chunk):
         nonlocal first_chunk_time
         if first_chunk_time is None:
@@ -16,6 +18,7 @@ def test_stream():
 
     print("Starting stream...")
     list_files_stream("/sdcard/DCIM/Camera/", on_chunk)
-    
+
+
 if __name__ == "__main__":
     test_stream()

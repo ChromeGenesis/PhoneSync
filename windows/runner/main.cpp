@@ -27,10 +27,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"phonesync", origin, size)) {
+  if (!window.Create(L"PhoneSync", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);
+  // Desktop app: launch maximized. Done natively at creation — the
+  // window_manager Dart plugin un-maximizes whenever it applies bounds.
+  ::ShowWindow(window.GetWindowHandle(), SW_MAXIMIZE);
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {

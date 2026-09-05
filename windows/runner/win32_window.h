@@ -95,6 +95,11 @@ class Win32Window {
   // window handle for top level window.
   HWND window_handle_ = nullptr;
 
+ public:
+  // Handle of the top-level window (used by runner startup to maximize).
+  HWND GetWindowHandle() const { return window_handle_; }
+
+ private:
   // window handle for hosted content.
   HWND child_content_ = nullptr;
 };

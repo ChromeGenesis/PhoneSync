@@ -28,7 +28,13 @@ bool FlutterWindow::OnCreate() {
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    // The runner shows the window maximized at creation (main.cpp).
+    // The template's unconditional Show() here is SW_SHOWNORMAL, which
+    // silently RESTORES a maximized window to its create-time size once the
+    // first frame lands — only show if it was never shown.
+    if (!::IsWindowVisible(GetWindowHandle())) {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is

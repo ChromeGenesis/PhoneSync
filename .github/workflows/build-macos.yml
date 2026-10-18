@@ -1,0 +1,69 @@
+name: Build macOS
+
+# Builds the .app on a hosted runner so no local Mac is needed.
+# The operator's MacBook is too old to host Xcode, so the build machine is
+# GitHub Actions. Trigger it by hand, or tag a release and it builds on the tag.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to the SDK this tree is developed against; bump deliberately rather
+  # than tracking `stable` under a release build.
+  FLUTTER_VERSION: 3.44.6
+  # The generated Runner target asks for 10.15, which modern runner images
+  # reject outright. 12.0 is the lowest floor accepted by Xcode 16 and is still
+  # well below the operator's macOS 12.7.6.
+  MACOSX_DEPLOYMENT_TARGET: '12.0'
+
+jobs:
+  build-macos:
+    # Xcode 16 image deliberately: newer images raise the macOS deployment
+    # floor above what the generated Podfile and 12.0 Runner target expect.
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Build macOS release
+        run: flutter build macos --release
+
+      - name: Package app
+        # ditto (not zip) preserves the bundle's symlinks, code signature and
+        # extended attributes; a plain zip produces an app macOS refuses to run.
+        run: |
+          APP="build/macos/Build/Products/Release/phonesync.app"
+          test -d "$APP" || { echo "expected $APP to exist"; exit 1; }
+          ditto -c -k --sequesterRsrc --keepParent "$APP" phonesync-macos.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonesync-macos
+          path: phonesync-macos.zip
+          if-no-files-found: error
+          retention-days: 30

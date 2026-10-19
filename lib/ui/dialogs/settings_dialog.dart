@@ -76,12 +76,32 @@ class SettingsDialog extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 11),
-                      Text(
-                        'Settings',
-                        style: OutfitStyle.get(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: colors.textPrimary,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'PhoneSync Settings',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: OutfitStyle.get(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: colors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Connection, transfers, storage & appearance',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: OutfitStyle.get(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                                color: colors.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const Spacer(),
@@ -119,6 +139,8 @@ class SettingsDialog extends StatelessWidget {
                   ),
                 ),
                 Divider(height: 1, color: colors.border.withAlpha(45)),
+                // The view owns its own search field, footer and dividers; the
+                // dialog contributes only the title bar.
                 const Expanded(child: SettingsView()),
               ],
             ),

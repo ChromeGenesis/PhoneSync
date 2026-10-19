@@ -151,6 +151,11 @@ class AppConfig extends ChangeNotifier {
     save();
   }
 
+  void setPhonePaths(List<String> paths) {
+    phonePaths = List.unmodifiable(paths);
+    save();
+  }
+
   void addPhonePath(String path) {
     if (path.isEmpty || phonePaths.contains(path)) return;
     phonePaths = [...phonePaths, path];

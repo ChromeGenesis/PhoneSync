@@ -137,11 +137,14 @@ class _StatusChip extends StatelessWidget {
     final (color, label) = switch (status) {
       ConnectionStatus.connected => (colors.emeraldLive, connection.deviceLabel),
       ConnectionStatus.connecting => (colors.goldPrimary, 'Connecting…'),
+      ConnectionStatus.adbMissing => (colors.roseDanger, 'adb not found'),
       ConnectionStatus.disconnected => (colors.roseDanger, 'No device'),
     };
 
     return GestureDetector(
-      onTap: status == ConnectionStatus.disconnected ? () => _reconnect(context) : null,
+      onTap: status == ConnectionStatus.connected
+          ? null
+          : () => _reconnect(context),
       // No outer container — a boxed chip this tall crowds the header's
       // bottom edge. Just the icon tile, identity, and live badge.
       child: Padding(
@@ -162,7 +165,9 @@ class _StatusChip extends StatelessWidget {
                     ? Icons.smartphone_rounded
                     : status == ConnectionStatus.connecting
                         ? Icons.phonelink_ring_rounded
-                        : Icons.phonelink_off_rounded,
+                        : status == ConnectionStatus.adbMissing
+                            ? Icons.build_circle_outlined
+                            : Icons.phonelink_off_rounded,
                 size: 16,
                 color: color,
               ),
@@ -190,6 +195,7 @@ class _StatusChip extends StatelessWidget {
               label: switch (status) {
                 ConnectionStatus.connected => 'LIVE',
                 ConnectionStatus.connecting => 'SCAN',
+                ConnectionStatus.adbMissing => 'ERROR',
                 ConnectionStatus.disconnected => 'OFFLINE',
               },
               color: color,
@@ -208,11 +214,15 @@ class _StatusChip extends StatelessWidget {
       await BrowserController.instance.openLocation(BrowseLocation.recents, force: true);
       BrowserController.instance.startPolling();
     } else if (context.mounted) {
+      final adbGone = c.status == ConnectionStatus.adbMissing;
       showAppSnack(
         context,
         type: SnackType.error,
-        title: 'No device found',
-        message: 'Check Wi-Fi ADB is enabled, or plug in via USB and rescan.',
+        title: adbGone ? 'adb not found' : 'No device found',
+        message: adbGone
+            ? '${c.adbFailure ?? 'The adb binary could not be located'}. '
+                'Set an absolute path in Settings → ADB executable.'
+            : 'Check Wi-Fi ADB is enabled, or plug in via USB and rescan.',
       );
     }
   }

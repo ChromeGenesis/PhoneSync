@@ -2,7 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  App Sandbox is deliberately DISABLED.
+
+	  PhoneSync's entire job is to shell out to `adb`, which lives outside the
+	  app bundle (typically ~/.local/bin or ~/Library/Android/sdk/platform-tools).
+	  App Sandbox denies process-exec of any binary outside the container, and
+	  there is no entitlement that grants it. A sandboxed build therefore cannot
+	  run adb at all, and cannot read ~/.android/adbkey, ~/.config, or the user's
+	  ~/Downloads / ~/Desktop / ~/Documents without user-selected file grants.
+
+	  Consequence: this build cannot be submitted to the Mac App Store. That is
+	  not a real constraint here — an app that requires a local adb toolchain is
+	  not App Store distributable anyway. Distribute the signed .app directly
+	  (and notarize it if you hand it to anyone else).
+
+	  Keep this file and DebugProfile.entitlements in sync; Flutter's docs are
+	  explicit that identical changes should be made to both.
+	-->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 </dict>
 </plist>

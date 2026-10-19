@@ -2,8 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  App Sandbox is deliberately DISABLED — see Release.entitlements for the
+	  full rationale. PhoneSync must exec `adb` from outside its bundle, which
+	  the sandbox forbids outright.
+
+	  The two exceptions below are kept because Flutter's tooling needs them and
+	  its docs call out removing them as a mistake: allow-jit is required for the
+	  Dart VM in debug/profile, network.server lets the running app talk back to
+	  flutter_tools over the VM service.
+	-->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.network.server</key>

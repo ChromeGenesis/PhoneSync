@@ -43,7 +43,16 @@ class PhoneFile {
       );
 }
 
-enum ConnectionStatus { disconnected, connecting, connected }
+enum ConnectionStatus {
+  disconnected,
+
+  /// The adb binary itself could not be located or spawned. Distinct from
+  /// [disconnected]: the phone may be fine, the toolchain is not there.
+  adbMissing,
+
+  connecting,
+  connected,
+}
 
 enum TransferKind { pull, push }
 

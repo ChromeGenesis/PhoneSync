@@ -5,12 +5,23 @@ import 'dart:typed_data';
 
 import 'adb_models.dart';
 
+/// Why an adb invocation yielded nothing usable.
+///
+/// The distinction is load-bearing: "the adb binary is missing" and "no phone
+/// is attached" otherwise produce byte-identical empty output, and only the
+/// first one is actionable by the user.
+enum AdbFailure { none, adbMissing, timedOut, spawnFailed }
+
 class AdbResult {
   final int exitCode;
   final String stdout;
   final String stderr;
-  const AdbResult(this.exitCode, this.stdout, this.stderr);
-  bool get ok => exitCode == 0;
+  final AdbFailure failure;
+  const AdbResult(this.exitCode, this.stdout, this.stderr,
+      [this.failure = AdbFailure.none]);
+
+  bool get ok => exitCode == 0 && failure == AdbFailure.none;
+  bool get adbMissing => failure == AdbFailure.adbMissing;
 }
 
 /// Single source of truth for every adb process this app spawns.
@@ -21,31 +32,158 @@ class AdbClient {
   AdbClient._();
   static final AdbClient instance = AdbClient._();
 
-  /// Resolved lazily so a missing adb only fails the call that needs it.
-  String adbExecutable = 'adb';
+  static const _defaultExecutable = 'adb';
+
+  String _configured = _defaultExecutable;
+  String? _resolved;
+  String? _resolveFailure;
+
+  /// What the user configured — a bare name or an absolute path.
+  String get adbConfigured => _configured;
+
+  set adbExecutable(String value) {
+    if (value == _configured) return;
+    _configured = value;
+    _resolved = null;
+    _resolveFailure = null;
+  }
+
+  /// Absolute path actually spawned, or null while adb is unlocated.
+  ///
+  /// Both lookups force resolution first — the failure field is only
+  /// meaningful once [_resolve] has actually run.
+  String? get adbResolved {
+    _resolve();
+    return _resolveFailure == null ? _resolved : null;
+  }
+
+  /// Why adb could not be located; null when it was located fine.
+  String? get adbResolveFailure {
+    _resolve();
+    return _resolveFailure;
+  }
+
+  /// False when adb cannot be spawned at all — every command will fail.
+  bool get adbAvailable => _resolve().isNotEmpty;
+
+  /// Resolves the configured executable to something spawnable.
+  ///
+  /// A GUI app launched from Finder/Dock inherits launchd's environment, where
+  /// PATH is typically unset entirely — so a bare `adb` resolves against
+  /// /usr/bin:/bin:/usr/sbin:/sbin only and fails, even though `adb` works
+  /// perfectly in the user's own shell. Probing known install locations makes
+  /// the default configuration work with no setup at all.
+  String _resolve() {
+    final cached = _resolved;
+    if (cached != null) return cached;
+
+    final configured = _configured.trim();
+    if (configured.isEmpty) {
+      _resolveFailure = 'ADB executable is not set';
+      return '';
+    }
+
+    // An explicit path is trusted verbatim — the user pointed at a file.
+    if (configured.contains('/') || configured.contains('\\')) {
+      if (File(configured).existsSync()) {
+        _resolved = configured;
+      } else {
+        _resolveFailure = 'No adb executable at ${File(configured).path}';
+      }
+      return _resolved ?? '';
+    }
+
+    for (final candidate in _candidatePaths(configured)) {
+      if (File(candidate).existsSync()) {
+        _resolved = candidate;
+        return candidate;
+      }
+    }
+    _resolveFailure = "Could not find '$configured' on this machine";
+    return '';
+  }
+
+  /// Directories to search for [name]: PATH first (so deliberate overrides
+  /// win), then well-known platform-tools locations, then system defaults.
+  Iterable<String> _candidatePaths(String name) sync* {
+    final names = Platform.isWindows ? [name, '$name.exe'] : <String>[name];
+    final dirs = <String>[];
+
+    final path = Platform.environment['PATH'];
+    if (path != null && path.isNotEmpty) {
+      dirs.addAll(path.split(Platform.isWindows ? ';' : ':'));
+    }
+
+    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+    if (home != null && home.isNotEmpty) {
+      dirs.addAll([
+        '$home/.local/bin',
+        '$home/bin',
+        '$home/Library/Android/sdk/platform-tools',
+        '$home/Android/Sdk/platform-tools',
+        '$home/AppData/Local/Android/Sdk/platform-tools',
+        '/Applications/Android Studio.app/Contents/sdk/platform-tools',
+      ]);
+    }
+
+    final sdk = Platform.environment['ANDROID_HOME'] ??
+        Platform.environment['ANDROID_SDK_ROOT'];
+    if (sdk != null && sdk.isNotEmpty) {
+      dirs.add('$sdk${Platform.pathSeparator}platform-tools');
+    }
+
+    dirs.addAll([
+      '/usr/local/bin',
+      '/opt/homebrew/bin',
+      '/usr/bin',
+      '/opt/local/bin',
+      '/snap/bin',
+      '/var/lib/flatpak/exports/bin',
+    ]);
+
+    final emitted = <String>{};
+    for (final dir in dirs) {
+      if (dir.isEmpty) continue;
+      for (final n in names) {
+        final full = '$dir${Platform.pathSeparator}$n';
+        if (emitted.add(full)) yield full;
+      }
+    }
+  }
 
   Future<AdbResult> run(
     List<String> args, {
     Duration timeout = const Duration(seconds: 15),
   }) async {
+    final exe = _resolve();
+    if (exe.isEmpty) {
+      return AdbResult(-1, '', _resolveFailure ?? 'adb unavailable',
+          AdbFailure.adbMissing);
+    }
+
     Process? proc;
+    var timedOut = false;
     try {
       // Process.start (not Process.run) so a timeout can KILL the adb.exe —
       // an unkillable timed-out process stays alive and keeps holding a slot
       // on the device transport, which wedges every later command.
-      proc = await Process.start(adbExecutable, args);
+      proc = await Process.start(exe, args);
       final out = StringBuffer();
       final err = StringBuffer();
       final outSub = proc.stdout.transform(utf8.decoder).listen(out.write);
       final errSub = proc.stderr.transform(utf8.decoder).listen(err.write);
-      final killer = Timer(timeout, proc.kill);
+      final killer = Timer(timeout, () {
+        timedOut = true;
+        proc?.kill();
+      });
       final code = await proc.exitCode;
       killer.cancel();
       await outSub.cancel();
       await errSub.cancel();
-      return AdbResult(code, out.toString(), err.toString());
+      return AdbResult(code, out.toString(), err.toString(),
+          timedOut ? AdbFailure.timedOut : AdbFailure.none);
     } on ProcessException catch (e) {
-      return AdbResult(-1, '', e.message);
+      return AdbResult(-1, '', e.message, AdbFailure.spawnFailed);
     } finally {
       // Belt-and-braces: never leave a stray process behind.
       proc?.kill();
@@ -59,8 +197,10 @@ class AdbClient {
   /// Starts a long-lived process and exposes raw stdout (binary-safe for
   /// `exec-out`). Caller owns the process handle.
   Future<Process?> start(List<String> args) async {
+    final exe = _resolve();
+    if (exe.isEmpty) return null;
     try {
-      return await Process.start(adbExecutable, args);
+      return await Process.start(exe, args);
     } on ProcessException {
       return null;
     }

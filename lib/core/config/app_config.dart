@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../adb/adb_client.dart';
+import 'app_dirs.dart';
 
 /// Single source of truth for every persisted setting.
 ///
@@ -12,8 +13,6 @@ import '../adb/adb_client.dart';
 class AppConfig extends ChangeNotifier {
   AppConfig._();
   static final AppConfig instance = AppConfig._();
-
-  static const _appName = 'PhoneSync';
 
   File? _file;
 
@@ -42,19 +41,9 @@ class AppConfig extends ChangeNotifier {
   bool _loaded = false;
   bool get loaded => _loaded;
 
-  /// Config file location: %APPDATA%/PhoneSync on Windows, else ~/.config.
-  static File _configFile() {
-    final env = Platform.environment;
-    String base;
-    if (env['APPDATA'] != null && env['APPDATA']!.isNotEmpty) {
-      base = '${env['APPDATA']}${Platform.pathSeparator}$_appName';
-    } else if (env['HOME'] != null) {
-      base = '${env['HOME']}${Platform.pathSeparator}.config${Platform.pathSeparator}$_appName';
-    } else {
-      base = Directory.systemTemp.path;
-    }
-    return File('$base${Platform.pathSeparator}config.json');
-  }
+  /// Config file location, per platform convention — see [AppDirs].
+  static File _configFile() =>
+      File('${AppDirs.configDir}${Platform.pathSeparator}config.json');
 
   Future<void> load() async {
     _file = _configFile();
@@ -80,10 +69,7 @@ class AppConfig extends ChangeNotifier {
     notifyListeners();
   }
 
-  static String _defaultSaveDir() {
-    final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '.';
-    return '$home${Platform.pathSeparator}Downloads';
-  }
+  static String _defaultSaveDir() => AppDirs.defaultSaveDir;
 
   Future<void> save() async {
     try {

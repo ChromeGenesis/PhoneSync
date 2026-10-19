@@ -292,20 +292,32 @@ class _BrowseViewState extends State<BrowseView> {
   Widget _disconnectedState(BuildContext context) {
     final colors = context.colors;
     final connection = ConnectionController.instance;
+    final connecting = connection.status == ConnectionStatus.connecting;
+    final adbGone = connection.status == ConnectionStatus.adbMissing;
+
+    final title = connecting
+        ? 'Searching for your phone…'
+        : adbGone
+            ? 'adb not found'
+            : 'No device connected';
+    final subtitle = connecting
+        ? 'Scanning wireless ADB and USB.'
+        : adbGone
+            ? connection.adbFailure ?? 'The adb binary could not be located.'
+            : 'Enable wireless debugging or plug in via USB, then rescan.';
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.phonelink_off_rounded,
+            adbGone ? Icons.build_circle_outlined : Icons.phonelink_off_rounded,
             size: 46,
             color: colors.textSecondary.withAlpha(75),
           ),
           const SizedBox(height: 12),
           Text(
-            connection.status == ConnectionStatus.connecting
-                ? 'Searching for your phone…'
-                : 'No device connected',
+            title,
             style: OutfitStyle.get(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -314,9 +326,7 @@ class _BrowseViewState extends State<BrowseView> {
           ),
           const SizedBox(height: 4),
           Text(
-            connection.status == ConnectionStatus.connecting
-                ? 'Scanning wireless ADB and USB.'
-                : 'Enable wireless debugging or plug in via USB, then rescan.',
+            subtitle,
             style: OutfitStyle.get(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -324,7 +334,8 @@ class _BrowseViewState extends State<BrowseView> {
             ),
           ),
           const SizedBox(height: 14),
-          if (connection.status == ConnectionStatus.disconnected)
+          if (connection.status == ConnectionStatus.disconnected ||
+              connection.status == ConnectionStatus.adbMissing)
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: colors.goldPrimary,

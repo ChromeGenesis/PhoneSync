@@ -7,6 +7,7 @@ import 'package:flutter/painting.dart';
 
 import '../adb/adb_client.dart';
 import '../adb/adb_models.dart';
+import '../config/app_dirs.dart';
 
 /// Two-tier thumbnail cache (memory LRU + disk) for device image files.
 ///
@@ -23,11 +24,7 @@ class ThumbnailService {
   Directory? _diskDir;
 
   Directory get _cacheDir {
-    final base = Platform.environment['TEMP'] ??
-        Platform.environment['TMP'] ??
-        Directory.systemTemp.path;
-    return _diskDir ??= Directory('$base${Platform.pathSeparator}phonesync_thumbs')
-      ..createSync(recursive: true);
+    return _diskDir ??= Directory(AppDirs.cacheDir)..createSync(recursive: true);
   }
 
   ImageProvider? peek(PhoneFile f) => _memory[_key(f)];

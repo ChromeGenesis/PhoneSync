@@ -24,14 +24,26 @@ class ConnectionController extends ChangeNotifier {
   String get deviceLabel => _device?.label ?? 'No device';
   String get addressLabel => _device?.id ?? '—';
 
+  /// Why the adb binary could not be located, when that's the blocker.
+  String? get adbFailure => Services.adb.adbResolveFailure;
+
   /// Try stored address, then configured scan list, then USB.
   Future<void> autoConnect() async {
-    if (_status != ConnectionStatus.disconnected) return;
-    _setStatus(ConnectionStatus.connecting);
+    if (_status == ConnectionStatus.connected ||
+        _status == ConnectionStatus.connecting) {
+      return;
+    }
     final cfg = Services.config;
     final log = Services.log;
 
-    log.connection(LogLevel.info, 'Auto-connect starting (adb: ${cfg.adbPath})…');
+    log.connection(LogLevel.info,
+        'Auto-connect starting (adb: ${cfg.adbPath})…');
+
+    // 0. Bail out loudly if adb isn't even spawnable — otherwise every call
+    // below returns empty and the scan reports a misleading "no device".
+    if (!_ensureAdbAvailable()) return;
+
+    _setStatus(ConnectionStatus.connecting);
 
     // 1. Already-plugged USB / stale wireless entry in `adb devices`.
     var devices = await Services.adb.listDevices();
@@ -57,6 +69,20 @@ class ConnectionController extends ChangeNotifier {
 
     // 3. Scan the configured candidates concurrently.
     await _scan();
+  }
+
+  /// Returns false (and parks the app in [ConnectionStatus.adbMissing]) when
+  /// the adb binary is unusable. Without this the missing binary is reported
+  /// as "no device reachable", which sends the user hunting the wrong problem.
+  bool _ensureAdbAvailable() {
+    final reason = Services.adb.adbResolveFailure;
+    if (reason == null) return true;
+    Services.log.connection(LogLevel.error,
+        '$reason — set an absolute path in Settings → ADB executable '
+        '(macOS: /usr/local/bin/adb, or ~/Library/Android/sdk/platform-tools/adb)');
+    _device = null;
+    _setStatus(ConnectionStatus.adbMissing);
+    return false;
   }
 
   Future<void> _scan() async {
@@ -91,6 +117,9 @@ class ConnectionController extends ChangeNotifier {
 
   Future<void> rescan() async {
     if (_status == ConnectionStatus.connected) return;
+    // Also the retry path out of adbMissing — the user may have just corrected
+    // the executable path in Settings, which invalidates the resolver cache.
+    if (!_ensureAdbAvailable()) return;
     _setStatus(ConnectionStatus.connecting);
     final devices = await Services.adb.listDevices();
     if (devices.isNotEmpty) {
@@ -148,6 +177,7 @@ class ConnectionController extends ChangeNotifier {
       if (!Services.config.autoConnect) return;
       _reconnectTicks++;
       if (_reconnectTicks % 3 != 0) return;
+      if (!_ensureAdbAvailable()) return;
       final devices = await Services.adb.listDevices();
       if (devices.isNotEmpty) {
         await _adopt(devices.first, reason: 'auto-reconnected');

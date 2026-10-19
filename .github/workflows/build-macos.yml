@@ -2,12 +2,20 @@ name: Build macOS
 
 # Builds the .app on a hosted runner so no local Mac is needed.
 # The operator's MacBook is too old to host Xcode, so the build machine is
-# GitHub Actions. Trigger it by hand, or tag a release and it builds on the tag.
+# GitHub Actions — and since `flutter analyze` runs here too, it is also the
+# only typecheck this project ever gets.
+#
+# Triggers:
+#   - push / PR             → analyze + build + artifact (the real gate)
+#   - workflow_dispatch     → same, on demand
+#   - tag v*                → same, plus the release artifact below
 on:
   workflow_dispatch:
   push:
+    branches: ['**']
     tags:
       - 'v*'
+  pull_request:
 
 permissions:
   contents: read

@@ -38,6 +38,7 @@ class AppConfig extends ChangeNotifier {
   ];
   int pollIntervalSeconds = 3;
   bool persistActivityLog = true;
+  ConflictPolicy conflictPolicy = ConflictPolicy.keepNewer;
 
   bool _loaded = false;
   bool get loaded => _loaded;
@@ -63,6 +64,10 @@ class AppConfig extends ChangeNotifier {
       pollIntervalSeconds = (map['pollIntervalSeconds'] as int?) ?? pollIntervalSeconds;
       persistActivityLog =
           (map['persistActivityLog'] as bool?) ?? persistActivityLog;
+      conflictPolicy = ConflictPolicy.values.firstWhere(
+        (p) => p.name == map['conflictPolicy'],
+        orElse: () => conflictPolicy,
+      );
       if (saveDir.isEmpty) saveDir = _defaultSaveDir();
     } catch (_) {
       saveDir = _defaultSaveDir();
@@ -88,6 +93,7 @@ class AppConfig extends ChangeNotifier {
         'pcFavorites': pcFavorites,
         'pollIntervalSeconds': pollIntervalSeconds,
         'persistActivityLog': persistActivityLog,
+        'conflictPolicy': conflictPolicy.name,
       }));
     } catch (_) {}
     notifyListeners();
@@ -118,6 +124,12 @@ class AppConfig extends ChangeNotifier {
     final v = s.clamp(2, 60);
     if (v == pollIntervalSeconds) return;
     pollIntervalSeconds = v;
+    save();
+  }
+
+  void setConflictPolicy(ConflictPolicy policy) {
+    if (policy == conflictPolicy) return;
+    conflictPolicy = policy;
     save();
   }
 

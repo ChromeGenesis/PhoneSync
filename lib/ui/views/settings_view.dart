@@ -1,6 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/adb/adb_models.dart';
 import '../../services/app_services.dart';
 import '../../services/theme_service.dart';
 import '../../state/browser_controller.dart';
@@ -103,6 +104,10 @@ class SettingsView extends StatelessWidget {
                     _row(context, 'Live refresh interval',
                         _intervalSelector(context, config.pollIntervalSeconds,
                             config.setPollIntervalSeconds),
+                        expand: false),
+                    _row(context, 'Push conflicts',
+                        _conflictSelector(context, config.conflictPolicy,
+                            config.setConflictPolicy),
                         expand: false),
                   ],
                 ),
@@ -258,6 +263,45 @@ class SettingsView extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: current == s ? colors.textGold : colors.textSecondary),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _conflictSelector(
+    BuildContext context, ConflictPolicy current, ValueChanged<ConflictPolicy> onChanged) {
+    final colors = context.colors;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final p in ConflictPolicy.values)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: GestureDetector(
+              onTap: () => onChanged(p),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                decoration: BoxDecoration(
+                  color: current == p
+                      ? colors.goldPrimary.withAlpha(45)
+                      : colors.surface.withAlpha(90),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: current == p
+                          ? colors.goldPrimary
+                          : colors.border.withAlpha(50)),
+                ),
+                child: Text(
+                  p.label,
+                  style: OutfitStyle.get(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: current == p ? colors.textGold : colors.textSecondary),
                 ),
               ),
             ),

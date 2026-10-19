@@ -8,6 +8,10 @@ import '../adb/adb_models.dart';
 import '../config/app_config.dart';
 import '../log/log_service.dart';
 
+/// What to do with a push whose destination on the phone is newer than the
+/// local file.
+enum _ConflictAction { push, skip, hold }
+
 /// Sequential transfer queue with per-byte pull progress.
 /// Single source of truth for the Transfers view and the header progress chip.
 class TransferService extends ChangeNotifier {
@@ -248,12 +252,98 @@ class TransferService extends ChangeNotifier {
     }
   }
 
+  /// Decides what to do about a push whose destination already exists.
+  /// Returns [_ConflictAction.push] unless the phone's copy is strictly newer
+  /// *and* a non-overwrite policy is configured. A destination that does not
+  /// exist, or a local file that is newer or the same age, always pushes —
+  /// only the "you are about to lose newer data" case is interesting.
+  Future<_ConflictAction> _resolveConflict(TransferItem item) async {
+    if (AppConfig.instance.conflictPolicy == ConflictPolicy.overwrite) {
+      return _ConflictAction.push;
+    }
+    // Reads the local mtime; a stat failure means we cannot prove a conflict.
+    final localFile = File(item.source);
+    final localMtime = await localFile.lastModified().then(
+          (d) => d.millisecondsSinceEpoch ~/ 1000,
+          onError: (_) => -1,
+        );
+    if (localMtime < 0) return _ConflictAction.push;
+
+    final remote = await AdbClient.instance.statOne(item.target);
+    if (remote == null || remote.modified <= localMtime) {
+      return _ConflictAction.push;
+    }
+
+    final policy = AppConfig.instance.conflictPolicy;
+    final note = 'phone copy is newer '
+        '(${DateTime.fromMillisecondsSinceEpoch(remote.modified * 1000)})';
+    if (policy == ConflictPolicy.keepNewer) {
+      item.conflicted = false;
+      item.conflictNote = 'skipped — $note';
+      LogService.instance.transfer(LogLevel.warning,
+          'Skipped ${item.target.split('/').last} — $note');
+      return _ConflictAction.skip;
+    }
+    // ask
+    item.conflicted = true;
+    item.conflictNote = note;
+    LogService.instance.transfer(LogLevel.warning,
+        'Conflict: ${item.target.split('/').last} — $note. Held for review.');
+    return _ConflictAction.hold;
+  }
+
+  /// Resolves a held conflict in the user's favour: overwrite the phone.
+  void overwriteConflicts(String jobId) {
+    for (final job in _jobs) {
+      if (job.id != jobId) continue;
+      for (final item in job.items) {
+        if (!item.conflicted) continue;
+        item.conflicted = false;
+        item.conflictNote = null;
+        item.sentBytes = 0;
+      }
+      job.doneItems = 0;
+      job.status = TransferStatus.queued;
+      job.error = null;
+      job.finishedAt = null;
+      job.startedAt = DateTime.now();
+      notifyListeners();
+      _pump();
+      return;
+    }
+  }
+
+  /// Resolves a held conflict the other way: keep what is on the phone.
+  void keepRemoteConflicts(String jobId) {
+    for (final job in _jobs) {
+      if (job.id != jobId) continue;
+      job.items.removeWhere((i) => i.conflicted);
+      job.error = null;
+      job.finishedAt = DateTime.now();
+      job.status = job.items.isEmpty
+          ? TransferStatus.done
+          : TransferStatus.cancelled;
+      notifyListeners();
+      LogService.instance.transfer(LogLevel.info,
+          'Kept phone copies for ${job.label}');
+      return;
+    }
+  }
+
+  /// Every item across all jobs currently held for conflict review.
+  List<(TransferJob, TransferItem)> get conflicts => [
+        for (final job in _jobs)
+          for (final item in job.items)
+            if (item.conflicted) (job, item),
+      ];
+
   Future<void> _runJob(TransferJob job) async {
     job.status = TransferStatus.running;
     notifyListeners();
     final log = LogService.instance;
     var ok = 0;
     var failed = 0;
+    var skipped = 0;
 
     for (final item in job.items) {
       if (_cancelled.remove(job.id)) {
@@ -262,6 +352,12 @@ class TransferService extends ChangeNotifier {
         log.transfer(LogLevel.warning, 'Cancelled: ${job.label}');
         notifyListeners();
         return;
+      }
+      // Already-held conflicts are a user decision, not a retry: skip them so
+      // the rest of the job can finish instead of failing on them again.
+      if (item.conflicted) {
+        failed++;
+        continue;
       }
       try {
         if (job.kind == TransferKind.pull) {
@@ -273,10 +369,24 @@ class TransferService extends ChangeNotifier {
           });
           item.sentBytes = item.totalBytes > 0 ? item.totalBytes : item.sentBytes;
         } else {
+          // Conflict check before anything is written: if the phone already
+          // has a *newer* file at this exact destination, pushing silently
+          // destroys the user's newer work.
+          final decision = await _resolveConflict(item);
+          if (decision == _ConflictAction.hold) {
+            failed++;
+            continue;
+          }
+          if (decision == _ConflictAction.skip) {
+            skipped++;
+            continue;
+          }
           final okPush = await AdbClient.instance.push(item.source, _dirOf(item.target));
           if (!okPush) throw StateError('adb push failed');
           final f = File(item.source);
           item.sentBytes = item.totalBytes = await f.length();
+          item.conflicted = false;
+          item.conflictNote = null;
           // The phone's contents changed — cached listings for that folder
           // must not be served again.
           BrowserController.instance.invalidatePath(_dirOf(item.target));
@@ -298,7 +408,7 @@ class TransferService extends ChangeNotifier {
           '${job.kind == TransferKind.pull ? 'Pulled' : 'Pushed'} $ok file${ok == 1 ? '' : 's'} — ${job.label}');
     } else if (ok == 0) {
       job.status = TransferStatus.failed;
-      job.error = 'all $failed items failed';
+      job.error = skipped > 0 ? 'all $skipped item(s) skipped (newer on phone)' : 'all $failed items failed';
       log.transfer(LogLevel.error, '${job.label} — all items failed');
     } else {
       job.status = TransferStatus.failed;

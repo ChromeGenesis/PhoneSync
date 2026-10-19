@@ -133,6 +133,25 @@ enum ConnectionStatus {
 
 enum TransferKind { pull, push }
 
+/// What to do when a push would overwrite a *newer* file on the phone.
+///
+/// Timestamps are the only signal ADB gives us, and clock skew between a
+/// phone and a laptop is common enough that "newer wins" is a real risk rather
+/// than a theoretical one — hence [ask] existing at all.
+enum ConflictPolicy {
+  /// Push regardless. Historical behaviour.
+  overwrite('Always overwrite'),
+
+  /// Leave the newer device file alone and count the push as skipped.
+  keepNewer('Keep the newer phone file'),
+
+  /// Queue the item as conflicted and let the user decide per file.
+  ask('Ask me every time');
+
+  const ConflictPolicy(this.label);
+  final String label;
+}
+
 enum TransferStatus {
   queued,
   running,
@@ -147,6 +166,11 @@ class TransferItem {
   final String target; // local path (pull) or device path (push)
   int totalBytes;
   int sentBytes;
+
+  /// Set when a push was held back because the destination on the phone was
+  /// newer. Cleared if the user resolves it.
+  bool conflicted = false;
+  String? conflictNote;
 
   TransferItem({
     required this.source,

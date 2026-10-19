@@ -523,6 +523,31 @@ class AdbClient {
   Future<List<PhoneFile>> statBatch(String parentDir, List<String> names) =>
       statPaths([for (final n in names) joinPath(parentDir, n)]);
 
+  /// Stat a single device path, or null when it does not exist.
+  ///
+  /// Used before a push to spot a destination that is newer than the file
+  /// about to overwrite it. Returns null rather than a zeroed record so a
+  /// missing file and an unreadable one are not mistaken for each other.
+  Future<PhoneFile?> statOne(String path) async {
+    final res = await shell("stat -c '%Y:%s:%F' ${q(path)} 2>/dev/null",
+        timeout: const Duration(seconds: 10));
+    if (!res.ok) return null;
+    final line = res.stdout.trim().split('\n').firstOrNull;
+    if (line == null) return null;
+    final parts = line.split(':');
+    if (parts.length < 3) return null;
+    final mtime = int.tryParse(parts[0]);
+    final size = int.tryParse(parts[1]);
+    if (mtime == null) return null;
+    return PhoneFile(
+      name: path.split('/').last,
+      path: path,
+      size: size ?? -1,
+      modified: mtime,
+      isDir: parts[2] == 'directory',
+    );
+  }
+
   /// Full directory listing: one `ls -1t` + batched `stat` round trips.
   Future<List<PhoneFile>> listDir(String dir) async {
     final names = await listNames(dir);

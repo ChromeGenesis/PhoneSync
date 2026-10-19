@@ -35,6 +35,24 @@ class TransfersView extends StatelessWidget {
                 children: [
                   const SectionLabel('Transfers'),
                   const Spacer(),
+                  if (service.conflicts.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _ConflictBanner(
+                      count: service.conflicts.length,
+                      onOverwrite: () {
+                        final ids = service.conflicts.map((c) => c.$1.id).toSet();
+                        for (final id in ids) {
+                          service.overwriteConflicts(id);
+                        }
+                      },
+                      onKeepRemote: () {
+                        final ids = service.conflicts.map((c) => c.$1.id).toSet();
+                        for (final id in ids) {
+                          service.keepRemoteConflicts(id);
+                        }
+                      },
+                    ),
+                  ],
                   if (service.hasPaused) ...[
                     TextButton.icon(
                       onPressed: service.resumeAll,
@@ -97,6 +115,68 @@ class TransfersView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ConflictBanner extends StatelessWidget {
+  final int count;
+  final VoidCallback onOverwrite;
+  final VoidCallback onKeepRemote;
+
+  const _ConflictBanner({
+    required this.count,
+    required this.onOverwrite,
+    required this.onKeepRemote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.roseDanger.withAlpha(26),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: colors.roseDanger.withAlpha(90)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 14, color: colors.roseDanger),
+          const SizedBox(width: 7),
+          Text(
+            '$count newer on phone',
+            style: OutfitStyle.get(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: colors.roseDanger),
+          ),
+          const SizedBox(width: 8),
+          InkWell(
+            onTap: onOverwrite,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Text('Overwrite',
+                  style: OutfitStyle.get(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: colors.textPrimary)),
+            ),
+          ),
+          InkWell(
+            onTap: onKeepRemote,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Text('Keep theirs',
+                  style: OutfitStyle.get(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: colors.textSecondary)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

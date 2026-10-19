@@ -29,8 +29,11 @@ class SettingsDialog extends StatelessWidget {
     // clips the top and bottom of the content symmetrically and reads as
     // "vertically centred". A fixed *width* on a narrow window squeezes the
     // rail and panel until labels wrap mid-word.
+    // 820 is what the content actually wants: a 220px rail, 48px of panel
+    // padding, and a 520px-wide control (the destination picker) leave ~30px
+    // spare. Anything wider is dead space.
     final screen = MediaQuery.sizeOf(context);
-    final width = (screen.width - 72).clamp(360.0, 980.0).toDouble();
+    final width = (screen.width - 72).clamp(360.0, 820.0).toDouble();
     final height = (screen.height - 72).clamp(380.0, 700.0).toDouble();
 
     return Dialog(

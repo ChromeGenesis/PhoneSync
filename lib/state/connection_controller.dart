@@ -56,6 +56,13 @@ class ConnectionController extends ChangeNotifier {
       final res = await Services.adb.pair(hostPort, code.trim());
       if (res.ok && res.stdout.contains('Successfully paired')) {
         Services.log.connection(LogLevel.success, 'Paired with $hostPort');
+        // Remember the endpoint we just paired with. mDNS ids carry no port and
+        // are useless to `adb tcpip`, so without this the follow-up "switch to
+        // 5555" step would have no address to work from.
+        final addresses = Services.config.scanAddresses;
+        if (!addresses.contains(hostPort)) {
+          Services.config.setScanAddresses([...addresses, hostPort]);
+        }
         // The pairing endpoint disappears once used; the connect one remains.
         await discoverWireless();
         return null;
@@ -109,6 +116,10 @@ class ConnectionController extends ChangeNotifier {
       Services.config.setScanAddresses([
         for (final a in Services.config.scanAddresses)
           if (a.startsWith('$host:')) target2 else a,
+        // Also add it when the host wasn't listed at all, so the new address
+        // survives even if pairing happened on a different network.
+        if (!Services.config.scanAddresses.any((a) => a.startsWith('$host:')))
+          target2,
       ]);
       return null;
     } finally {
@@ -119,11 +130,21 @@ class ConnectionController extends ChangeNotifier {
 
   /// Best guess at the phone's host address, for actions that need one.
   String get lastKnownHost {
-    final known = _device?.id ??
-        Services.config.lastDeviceAddress ??
-        Services.config.scanAddresses.firstOrNull ??
-        '';
-    return known.contains(':') ? known.split(':').first : known;
+    // Only accept something that actually looks like host:port. An mDNS
+    // transport id ("adb-R3CN…._adb-tls-connect._tcp") has no port and would
+    // otherwise be handed straight to `adb tcpip`, which then targets a device
+    // name instead of an address.
+    for (final candidate in <String?>[
+      _device?.id,
+      Services.config.lastDeviceAddress,
+      ...Services.config.scanAddresses,
+    ]) {
+      if (candidate == null || candidate.isEmpty) continue;
+      if (candidate.contains(':') && candidate.split(':').first.contains('.')) {
+        return candidate.split(':').first;
+      }
+    }
+    return '';
   }
 
   String _describeFailure(AdbResult res, String fallback) {

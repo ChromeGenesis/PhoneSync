@@ -155,6 +155,7 @@ class AdbClient {
     List<String> args, {
     Duration timeout = const Duration(seconds: 15),
     String? stdinData,
+    bool targetDevice = true,
   }) async {
     final exe = _resolve();
     if (exe.isEmpty) {
@@ -162,13 +163,21 @@ class AdbClient {
           AdbFailure.adbMissing);
     }
 
+    // Once a device is adopted, every device-scoped command must name it.
+    // A phone reachable over TCP/IP 5555 *and* over wireless debugging shows
+    // up as two entries, and bare `adb shell` then fails outright with
+    // "more than one device/emulator" — every listing, every transfer, gone.
+    final target = targetDevice ? _targetDevice : null;
+    final effective =
+        target != null && _acceptsTarget(args) ? ['-s', target, ...args] : args;
+
     Process? proc;
     var timedOut = false;
     try {
       // Process.start (not Process.run) so a timeout can KILL the adb.exe —
       // an unkillable timed-out process stays alive and keeps holding a slot
       // on the device transport, which wedges every later command.
-      proc = await Process.start(exe, args);
+      proc = await Process.start(exe, effective);
       if (stdinData != null) {
         // `adb pair` blocks on an "Enter pairing code:" prompt, so the code has
         // to go in over stdin. A write can still fail with EPIPE when adb bails
@@ -211,11 +220,47 @@ class AdbClient {
   Future<Process?> start(List<String> args) async {
     final exe = _resolve();
     if (exe.isEmpty) return null;
+    final target = _targetDevice;
+    final effective =
+        target != null && _acceptsTarget(args) ? ['-s', target, ...args] : args;
     try {
-      return await Process.start(exe, args);
+      return await Process.start(exe, effective);
     } on ProcessException {
       return null;
     }
+  }
+
+  /// Commands that address the adb server or the network rather than a device,
+  /// and so must never have `-s` injected.
+  static const _serverCommands = {
+    'connect',
+    'disconnect',
+    'devices',
+    'pair',
+    'mdns',
+    'start-server',
+    'kill-server',
+    'version',
+    'help',
+    'reconnect',
+  };
+
+  bool _acceptsTarget(List<String> args) => commandIsDeviceScoped(args);
+
+  /// Whether an adb invocation addresses a device (and so can take `-s`).
+  /// Exposed so the behaviour can be asserted without reaching into internals.
+  static bool commandIsDeviceScoped(List<String> args) =>
+      args.isNotEmpty && !_serverCommands.contains(args.first);
+
+  /// The device all device-scoped commands are pinned to.
+  String? get targetDevice => _targetDevice;
+  String? _targetDevice;
+
+  /// Pin (or clear, with null) the active device. Call this whenever the
+  /// connection state changes — a stale id makes every command fail.
+  void setTargetDevice(String? id) {
+    if (id == _targetDevice) return;
+    _targetDevice = id;
   }
 
   /// Files per batched `stat` round trip. Large enough that a 500-file
@@ -307,6 +352,115 @@ class AdbClient {
         [if (deviceId != null) ...['-s', deviceId], 'tcpip', '$port'],
         timeout: const Duration(seconds: 20),
       );
+
+  // ------------------------------------------------------- device actions
+
+  /// Total and free space on the phone's primary volume.
+  ///
+  /// `df -k` reports 1K blocks, which sidesteps the -b/-h flag differences
+  /// between toybox versions without having to parse human-readable output.
+  Future<StorageInfo?> storageInfo() async {
+    final res = await shell("df -k /sdcard | tail -n 1", timeout: const Duration(seconds: 12));
+    if (!res.ok) return null;
+    final line = res.stdout.trim().split('\n').last;
+    final cols = line.split(RegExp(r'\s+')).where((c) => c.isNotEmpty).toList();
+    // Filesystem 1K-blocks Used Available Capacity Mounted-on
+    if (cols.length < 4) return null;
+    final total = int.tryParse(cols[1]);
+    final used = int.tryParse(cols[2]);
+    final free = int.tryParse(cols[3]);
+    if (total == null || used == null || free == null) return null;
+    return StorageInfo(
+      totalBytes: total * 1024,
+      freeBytes: free * 1024,
+      usedBytes: used * 1024,
+    );
+  }
+
+  /// Recursive size of a device directory, in bytes.
+  ///
+  /// `du -sk` walks the whole tree, so this is a slow call on a large folder —
+  /// callers must show progress rather than treat it as instant.
+  Future<int> dirSizeBytes(String path) async {
+    final res = await shell('du -sk ${q(path)} 2>/dev/null',
+        timeout: const Duration(seconds: 45));
+    if (!res.ok) return -1;
+    final first = res.stdout.trim().split('\n').firstOrNull;
+    if (first == null) return -1;
+    final kb = int.tryParse(first.split(RegExp(r'\s+')).first);
+    return kb == null ? -1 : kb * 1024;
+  }
+
+  /// Deletes a file or directory tree on the device.
+  Future<bool> deletePath(String path) async {
+    final res = await shell('rm -rf ${q(path)}', timeout: const Duration(seconds: 20));
+    return res.ok;
+  }
+
+  /// Opens a device file in whichever app claims its type.
+  ///
+  /// Uses a file:// URI rather than a MediaStore content:// one because the
+  /// latter needs the media id, which is not available for arbitrary paths.
+  /// --grant-read-uri-permission is required or the receiving app is denied
+  /// read access and the intent appears to succeed but opens nothing.
+  Future<bool> openFileOnDevice(String path) async {
+    final res = await shell(
+      'am start -a android.intent.action.VIEW --grant-read-uri-permission '
+      '-t ${q(mimeFor(path))} -d ${q(_fileUri(path))}',
+    );
+    return res.ok;
+  }
+
+  /// Opens the system share sheet for a device file.
+  Future<bool> shareFile(String path) async {
+    final res = await shell(
+      'am start -a android.intent.action.SEND --grant-read-uri-permission '
+      '-t ${q(mimeFor(path))} --eu android.intent.extra.STREAM ${q(_fileUri(path))}',
+    );
+    return res.ok;
+  }
+
+  /// Sets an image as the home-screen wallpaper.
+  Future<bool> setWallpaper(String path) async {
+    final res = await shell(
+      'am start -a android.intent.action.SET_WALLPAPER '
+      '--grant-read-uri-permission -t image/* -d ${q(_fileUri(path))}',
+    );
+    return res.ok;
+  }
+
+  static String _fileUri(String path) =>
+      path.startsWith('/') ? 'file://$path' : path;
+
+  /// Best-effort MIME from extension. Deliberately small and static: a
+  /// content-type lookup service is overkill for the handful of types that
+  /// actually get shared or viewed from this app.
+  static String mimeFor(String path) {
+    final name = path.split('/').last.toLowerCase();
+    final ext = name.contains('.') ? name.split('.').last : '';
+    return switch (ext) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'heic' || 'heif' => 'image/heic',
+      'bmp' => 'image/bmp',
+      'mp4' => 'video/mp4',
+      'mkv' => 'video/x-matroska',
+      'mov' => 'video/quicktime',
+      'webm' => 'video/webm',
+      '3gp' => 'video/3gpp',
+      'mp3' => 'audio/mpeg',
+      'm4a' => 'audio/mp4',
+      'wav' => 'audio/wav',
+      'flac' => 'audio/flac',
+      'ogg' => 'audio/ogg',
+      'pdf' => 'application/pdf',
+      'txt' || 'log' => 'text/plain',
+      'zip' => 'application/zip',
+      _ => '*/*',
+    };
+  }
 
   // ---------------------------------------------------------------- listing
 

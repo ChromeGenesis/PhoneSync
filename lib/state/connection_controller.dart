@@ -260,6 +260,9 @@ class ConnectionController extends ChangeNotifier {
   }
 
   Future<void> _adopt(AdbDevice device, {required String reason}) async {
+    // Pin the transport before any further command runs, so listing and
+    // transfers target this device even if another transport is also visible.
+    Services.adb.setTargetDevice(device.id);
     if (device.model.isEmpty) {
       final model = await Services.adb.deviceModel(device.id);
       _device = AdbDevice(id: device.id, model: model ?? device.id, isWireless: device.isWireless);
@@ -277,6 +280,7 @@ class ConnectionController extends ChangeNotifier {
 
   Future<void> disconnect() async {
     _stopWatchdog();
+    Services.adb.setTargetDevice(null);
     final dev = _device;
     if (dev != null && dev.isWireless) {
       await Services.adb.disconnect(dev.id);
@@ -298,6 +302,9 @@ class ConnectionController extends ChangeNotifier {
         final id = _device?.id;
         final still = devices.any((d) => d.id == id);
         if (!still) {
+          // Stop pinning a transport that is gone, or every later command
+          // fails with "device not found" instead of falling back cleanly.
+          Services.adb.setTargetDevice(null);
           _device = null;
           _setStatus(ConnectionStatus.disconnected);
           Services.log.connection(LogLevel.warning, 'Device lost ($id) — retrying silently');

@@ -1,6 +1,37 @@
 /// Domain models shared across the ADB layer, controllers, and UI.
 library;
 
+/// Free/total space on the phone's primary storage.
+class StorageInfo {
+  final int totalBytes;
+  final int freeBytes;
+  final int usedBytes;
+
+  const StorageInfo({
+    required this.totalBytes,
+    required this.freeBytes,
+    required this.usedBytes,
+  });
+
+  double get usedFraction =>
+      totalBytes <= 0 ? 0 : (usedBytes / totalBytes).clamp(0.0, 1.0);
+
+  String get usedLabel => _human(usedBytes);
+  String get freeLabel => _human(freeBytes);
+  String get totalLabel => _human(totalBytes);
+
+  static String _human(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return '${value.toStringAsFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}';
+  }
+}
+
 /// A service a device advertises over mDNS.
 ///
 /// Wireless debugging (Android 11+) publishes two of these per device: a long-

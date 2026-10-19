@@ -16,6 +16,7 @@
 import 'dart:io';
 
 import '../lib/core/adb/adb_client.dart';
+import '../lib/core/adb/adb_models.dart';
 
 Future<void> main() async {
   final adb = AdbClient.instance;
@@ -57,7 +58,54 @@ Future<void> main() async {
   final model = await adb.deviceModel(devices.first.id);
   stdout.writeln('\nOK: reached ${model ?? devices.first.id} with no PATH help.');
 
+  await _verifyDevicePinning(adb, devices);
   await _verifyMissingIsSurfaced(adb);
+}
+
+/// A phone reachable over TCP/IP *and* wireless debugging appears twice in
+/// `adb devices`, and every unscoped command then dies with "more than one
+/// device/emulator". Pinning the target is what keeps the app alive there.
+Future<void> _verifyDevicePinning(AdbClient adb, List<AdbDevice> devices) async {
+  if (devices.isEmpty) return;
+  stdout.writeln('\n--- device pinning ---');
+  var failures = 0;
+
+  adb.setTargetDevice(devices.first.id);
+  stdout.writeln('pinned: ${adb.targetDevice}');
+
+  final checks = <String, bool>{
+    'targetDevice is set': adb.targetDevice == devices.first.id,
+    'devices is NOT targeted': !AdbClient.commandIsDeviceScoped(['devices', '-l']),
+    'connect is NOT targeted':
+        !AdbClient.commandIsDeviceScoped(['connect', '1.2.3.4:5555']),
+    'mdns is NOT targeted': !AdbClient.commandIsDeviceScoped(['mdns', 'services']),
+    'shell IS targeted': AdbClient.commandIsDeviceScoped(['shell', 'echo hi']),
+    'exec-out IS targeted':
+        AdbClient.commandIsDeviceScoped(['exec-out', 'cat', '/x']),
+    'tcpip IS targeted': AdbClient.commandIsDeviceScoped(['tcpip', '5555']),
+  };
+
+  checks.forEach((label, pass) {
+    stdout.writeln('  ${pass ? 'PASS' : 'FAIL'}  $label');
+    if (!pass) failures++;
+  });
+
+  // The real proof: a live command that only succeeds when pinned.
+  final res = await adb.shell('echo ping', timeout: const Duration(seconds: 10));
+  final works = res.ok && res.stdout.contains('ping');
+  stdout.writeln('  ${works ? 'PASS' : 'FAIL'}  pinned shell round-trip'
+      '${works ? '' : ' — ${res.stderr.trim()}'}');
+  if (!works) failures++;
+
+  adb.setTargetDevice(null);
+  final unpinned = adb.targetDevice == null;
+  stdout.writeln('  ${unpinned ? 'PASS' : 'FAIL'}  unpins');
+  if (!unpinned) failures++;
+
+  stdout.writeln(failures == 0
+      ? 'OK: device pinning behaves correctly.'
+      : 'FAIL: $failures pin check(s) failed.');
+  if (failures > 0) exitCode = 1;
 }
 
 /// The bug this whole exercise exists for: a missing adb used to come back as

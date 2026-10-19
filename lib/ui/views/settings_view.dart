@@ -32,6 +32,7 @@ class SettingsView extends StatelessWidget {
                   context,
                   'Connection',
                   Icons.settings_input_antenna_outlined,
+                  subtitle: 'How PhoneSync finds and talks to your phone',
                   children: [
                     _row(
                       context,
@@ -41,16 +42,21 @@ class SettingsView extends StatelessWidget {
                         config.adbPath,
                         (v) => config.setAdbPath(v),
                       ),
+                      hint: config.adbPath == 'adb'
+                          ? 'Searching PATH and known SDK locations'
+                          : config.adbPath,
                     ),
                     _row(context, 'Auto-connect on launch',
                         _toggle(context, config.autoConnect, config.setAutoConnect),
-                        expand: false),
+                        expand: false,
+                        hint: 'Reconnect as soon as the app opens'),
                     _row(context, 'Persist activity log',
                         _toggle(context, config.persistActivityLog, (v) {
                           config.setPersistActivityLog(v);
                           Services.log.setPersistence(v);
                         }),
-                        expand: false),
+                        expand: false,
+                        hint: 'Keeps the log across restarts'),
                     const SizedBox(height: 8),
                     const SectionLabel('Wireless scan addresses', fontSize: 10),
                     const SizedBox(height: 6),
@@ -65,6 +71,7 @@ class SettingsView extends StatelessWidget {
                   context,
                   'Storage',
                   Icons.folder_copy_outlined,
+                  subtitle: 'Where files go, and when the phone is checked',
                   children: [
                     _row(
                       context,
@@ -100,15 +107,18 @@ class SettingsView extends StatelessWidget {
                         ],
                       ),
                       expand: false,
+                      hint: 'Where pulled files land',
                     ),
                     _row(context, 'Live refresh interval',
                         _intervalSelector(context, config.pollIntervalSeconds,
                             config.setPollIntervalSeconds),
-                        expand: false),
+                        expand: false,
+                        hint: 'How often the listing re-checks the phone'),
                     _row(context, 'Push conflicts',
                         _conflictSelector(context, config.conflictPolicy,
                             config.setConflictPolicy),
-                        expand: false),
+                        expand: false,
+                        hint: 'What to do when the phone already has a newer file'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -117,9 +127,11 @@ class SettingsView extends StatelessWidget {
                   'Appearance',
                   Icons.palette_outlined,
                   children: [
-                    _row(context, 'Theme mode', _themeModeSelector(context), expand: false),
-                    const SizedBox(height: 10),
-                    _row(context, 'Accent', _accentSelector(context), expand: false),
+                    _row(context, 'Theme mode', _themeModeSelector(context), expand: false,
+                        hint: 'System follows your macOS appearance'),
+                    const SizedBox(height: 6),
+                    _row(context, 'Accent', _accentSelector(context), expand: false,
+                        hint: 'Tints buttons, highlights and the live badge'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -163,10 +175,10 @@ class SettingsView extends StatelessWidget {
   // ------------------------------------------------------------- building
 
   Widget _card(BuildContext context, String title, IconData icon,
-      {required List<Widget> children}) {
+      {required List<Widget> children, String? subtitle}) {
     final colors = context.colors;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
       decoration: BoxDecoration(
         color: colors.surface.withAlpha(45),
         borderRadius: BorderRadius.circular(16),
@@ -187,14 +199,37 @@ class SettingsView extends StatelessWidget {
                 child: Icon(icon, size: 15, color: colors.goldPrimary),
               ),
               const SizedBox(width: 9),
-              Text(
-                title,
-                style: OutfitStyle.get(
-                    fontSize: 13, fontWeight: FontWeight.w800, color: colors.textPrimary),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: OutfitStyle.get(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: OutfitStyle.get(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textMuted),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          // Hairline under the header: separates the section title from a long
+          // run of identical rows without boxing each one.
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 14),
+            child: Divider(height: 1, color: colors.border.withAlpha(35)),
+          ),
           ...children,
         ],
       ),
@@ -202,25 +237,43 @@ class SettingsView extends StatelessWidget {
   }
 
   Widget _row(BuildContext context, String label, Widget control,
-      {bool expand = true}) {
+      {bool expand = true, String? hint}) {
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 180,
-            child: Text(
-              label,
-              style: OutfitStyle.get(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: colors.textSecondary),
+            width: 190,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: OutfitStyle.get(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: colors.textSecondary),
+                ),
+                if (hint != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    hint,
+                    style: OutfitStyle.get(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                        color: colors.textMuted),
+                  ),
+                ],
+              ],
             ),
           ),
+          const SizedBox(width: 14),
           Expanded(
             // Compact controls (toggles, chip groups) anchor right instead of
             // stretching — a stretched switch reads as a progress bar.
             child: expand
-                ? control
+                ? Align(alignment: Alignment.centerLeft, child: control)
                 : Align(alignment: Alignment.centerRight, child: control),
           ),
         ],

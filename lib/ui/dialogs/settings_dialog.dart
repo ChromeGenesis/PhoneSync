@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -62,6 +63,24 @@ class SettingsDialog extends StatelessWidget {
                             fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary),
                       ),
                       const Spacer(),
+                      // Surface the shortcut in the one place it is relevant.
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colors.surface.withAlpha(90),
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(color: colors.border.withAlpha(50)),
+                        ),
+                        child: Text(
+                          Platform.isMacOS ? '⌘S to reopen' : 'Ctrl+S to reopen',
+                          style: FiraCodeStyle.get(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textMuted,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       _closeButton(context),
                     ],
                   ),

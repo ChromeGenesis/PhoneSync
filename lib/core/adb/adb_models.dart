@@ -164,7 +164,10 @@ class TransferJob {
   TransferStatus status;
   String? error;
   int doneItems = 0;
-  final DateTime startedAt = DateTime.now();
+
+  /// Non-final so a retried job can report when the new attempt started
+  /// rather than the original enqueue time.
+  DateTime startedAt = DateTime.now();
   DateTime? finishedAt;
 
   TransferJob({

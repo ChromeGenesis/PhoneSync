@@ -155,12 +155,16 @@ class TransferService extends ChangeNotifier {
           LogLevel.info, 'Nothing to retry in ${job.label}');
       return;
     }
+    // totalBytes and sentBytes are derived from [items], so clearing and
+    // re-seeding the item list is what resets the byte totals — there is no
+    // separate counter to zero.
+    for (final item in failedItems) {
+      item.sentBytes = 0;
+    }
     job.items
       ..clear()
       ..addAll(failedItems);
     job.doneItems = 0;
-    job.totalBytes = failedItems.fold(0, (s, i) => s + i.totalBytes);
-    job.sentBytes = 0;
     job.startedAt = DateTime.now();
     job.finishedAt = null;
     job.error = null;

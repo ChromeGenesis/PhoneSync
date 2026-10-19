@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app.dart';
 import '../../core/adb/adb_models.dart';
 import '../../core/device/device_actions.dart';
 import '../../services/theme_service.dart';
@@ -30,18 +31,19 @@ class FileActionMenu extends StatelessWidget {
       ),
       onSelected: (value) => _run(context, value),
       itemBuilder: (context) => [
-        _item(Icons.open_in_new_rounded, 'Open on phone', 'open'),
-        _item(Icons.ios_share_rounded, 'Share…', 'share'),
+        _item(context, Icons.open_in_new_rounded, 'Open on phone', 'open'),
+        _item(context, Icons.ios_share_rounded, 'Share…', 'share'),
         if (file.isImage)
-          _item(Icons.wallpaper_rounded, 'Set as wallpaper', 'wallpaper'),
+          _item(context, Icons.wallpaper_rounded, 'Set as wallpaper', 'wallpaper'),
         const PopupMenuDivider(),
-        _item(Icons.delete_outline_rounded, 'Delete from phone', 'delete',
+        _item(context, Icons.delete_outline_rounded, 'Delete from phone', 'delete',
             danger: true),
       ],
     );
   }
 
   PopupMenuItem<String> _item(
+    BuildContext context,
     IconData icon,
     String label,
     String value, {

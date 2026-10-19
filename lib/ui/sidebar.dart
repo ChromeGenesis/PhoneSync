@@ -19,7 +19,7 @@ import 'home_shell.dart';
 
 /// 208px glass sidebar: browse locations, discovered phone folders, and
 /// transfer actions (the old app's left rail, reorganized).
-class AppSidebar extends StatelessWidget {
+class AppSidebar extends StatefulWidget {
   final ShellTab activeTab;
   final ValueChanged<ShellTab> onTabSelected;
 
@@ -28,6 +28,26 @@ class AppSidebar extends StatelessWidget {
     required this.activeTab,
     required this.onTabSelected,
   });
+
+  @override
+  State<AppSidebar> createState() => _AppSidebarState();
+}
+
+class _AppSidebarState extends State<AppSidebar> {
+  /// Whether the phone-folder list has anything below the fold. Drives the
+  /// caret strip, which lives outside the fade mask so it stays legible.
+  bool _foldersOverflow = false;
+
+  ShellTab get activeTab => widget.activeTab;
+  ValueChanged<ShellTab> get onTabSelected => widget.onTabSelected;
+
+  final _folderScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _folderScroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,18 +102,43 @@ class AppSidebar extends StatelessWidget {
               const SizedBox(height: 6),
               Expanded(
                 child: connected
-                    // Bottom fade signals the folder list scrolls instead of
-                    // letting the last chip collide with the section below;
-                    // the caret over it says so outright.
-                    ? ShaderMask(
-                        shaderCallback: (rect) => const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
-                          stops: [0, 0.82, 1],
-                        ).createShader(rect),
-                        blendMode: BlendMode.dstIn,
-                        child: _folderChips(context, browser),
+                    // The fade masks the LIST ONLY. The caret used to live
+                    // inside it, which meant it was rendered in the very band
+                    // the gradient fades to zero — invisible by construction,
+                    // and sitting on top of the last row besides.
+                    ? Column(
+                        children: [
+                          Expanded(
+                            child: ShaderMask(
+                              shaderCallback: (rect) => const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0xFF000000),
+                                  Color(0xFF000000),
+                                  Color(0x00000000),
+                                ],
+                                stops: [0, 0.82, 1],
+                              ).createShader(rect),
+                              blendMode: BlendMode.dstIn,
+                              child: _folderChips(context, browser),
+                            ),
+                          ),
+                          // Own reserved strip: never overlaps a row.
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.bottomCenter,
+                            child: _foldersOverflow
+                                ? ScrollCaretIndicator(
+                                    controller: _folderScroll,
+                                  )
+                                : const SizedBox(
+                                    height: 4,
+                                    width: double.infinity,
+                                  ),
+                          ),
+                        ],
                       )
                     : _disconnectedNote(context),
               ),
@@ -162,8 +207,13 @@ class AppSidebar extends StatelessWidget {
       ...saved.map((p) => (p.split('/').where((s) => s.isNotEmpty).last, p)),
     }.toList(growable: false);
     final isFolderActive = browser.location.id == BrowseViewId.folder;
-    return ScrollHintCaret(
-      padding: const EdgeInsets.only(bottom: 4),
+    return ScrollOverflowWatcher(
+      controller: _folderScroll,
+      onChanged: (more) {
+        if (mounted && more != _foldersOverflow) {
+          setState(() => _foldersOverflow = more);
+        }
+      },
       builder: (context, controller) => ListView.builder(
         controller: controller,
         itemCount: entries.length,

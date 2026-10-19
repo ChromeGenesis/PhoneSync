@@ -67,46 +67,54 @@ class _SettingsViewState extends State<SettingsView> {
         ConnectionController.instance,
       ]),
       builder: (context, _) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Section rail ────────────────────────────────────────────────
-            Container(
-              width: 186,
-              decoration: BoxDecoration(
-                color: colors.surface.withAlpha(30),
-                border: Border(
-                  right: BorderSide(color: colors.border.withAlpha(45)),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final s in _Section.values) _railItem(context, s),
-                ],
-              ),
-            ),
-            // ── Panel ──────────────────────────────────────────────────────
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 160),
-                switchInCurve: Curves.easeOut,
-                child: SingleChildScrollView(
-                  key: ValueKey(_section),
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 26),
+        // Proportional rail. A fixed 186px starves the panel on a narrow
+        // window, which is what made labels and hints wrap badly.
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final railWidth = (constraints.maxWidth * 0.28).clamp(132.0, 186.0);
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: railWidth,
+                  decoration: BoxDecoration(
+                    color: colors.surface.withAlpha(30),
+                    border: Border(
+                      right: BorderSide(color: colors.border.withAlpha(45)),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _panelHeader(context, _section),
-                      const SizedBox(height: 18),
-                      ..._content(context, _section),
+                      for (final s in _Section.values) _railItem(context, s),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    switchInCurve: Curves.easeOut,
+                    child: SingleChildScrollView(
+                      key: ValueKey(_section),
+                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 26),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _panelHeader(context, _section),
+                          const SizedBox(height: 18),
+                          ..._content(context, _section),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -150,12 +158,19 @@ class _SettingsViewState extends State<SettingsView> {
                   color: active ? Colors.black : colors.textSecondary,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  s.title,
-                  style: OutfitStyle.get(
-                    fontSize: 12.5,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    color: active ? Colors.black : colors.textSecondary,
+                // Bounded: an unbounded Text in a Row takes its intrinsic
+                // width and pushes the row wider than the rail, which is what
+                // made section names wrap onto a second, ragged line.
+                Expanded(
+                  child: Text(
+                    s.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: OutfitStyle.get(
+                      fontSize: 12.5,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                      color: active ? Colors.black : colors.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -188,6 +203,8 @@ class _SettingsViewState extends State<SettingsView> {
               const SizedBox(height: 4),
               Text(
                 s.blurb,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
                 style: OutfitStyle.get(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -517,6 +534,8 @@ class _SettingsViewState extends State<SettingsView> {
                   const SizedBox(height: 2),
                   Text(
                     hint,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: OutfitStyle.get(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -596,41 +615,38 @@ class _SettingsViewState extends State<SettingsView> {
     ValueChanged<ConflictPolicy> onChanged,
   ) {
     final colors = context.colors;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    // Wrap, not Row: labels as long as "Keep the newer phone file" cannot fit
+    // on one line at a narrow width.
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
       children: [
         for (final p in ConflictPolicy.values)
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: GestureDetector(
-              onTap: () => onChanged(p),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
+          GestureDetector(
+            onTap: () => onChanged(p),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+              decoration: BoxDecoration(
+                color: current == p
+                    ? colors.goldPrimary.withAlpha(45)
+                    : colors.surface.withAlpha(90),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
                   color: current == p
-                      ? colors.goldPrimary.withAlpha(45)
-                      : colors.surface.withAlpha(90),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: current == p
-                        ? colors.goldPrimary
-                        : colors.border.withAlpha(50),
-                  ),
+                      ? colors.goldPrimary
+                      : colors.border.withAlpha(50),
                 ),
-                child: Text(
-                  p.label,
-                  style: OutfitStyle.get(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: current == p
-                        ? colors.textGold
-                        : colors.textSecondary,
-                  ),
+              ),
+              child: Text(
+                p.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: OutfitStyle.get(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: current == p ? colors.textGold : colors.textSecondary,
                 ),
               ),
             ),
@@ -681,27 +697,31 @@ class _SettingsViewState extends State<SettingsView> {
     ValueChanged<String> onSaved,
   ) {
     final controller = TextEditingController(text: initial);
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 340),
-      child: TextField(
-        controller: controller,
-        onSubmitted: onSaved,
-        style: OutfitStyle.get(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: context.colors.textPrimary,
-        ),
-        decoration: glassInputDecoration(context: context, hintText: 'adb')
-            .copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(
-                  Icons.check_rounded,
-                  size: 16,
-                  color: context.colors.goldPrimary,
+    // Flexible rather than a hard 340px cap: that cap was wider than the
+    // panel at small window sizes and forced the row to reflow.
+    return Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: TextField(
+          controller: controller,
+          onSubmitted: onSaved,
+          style: OutfitStyle.get(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: context.colors.textPrimary,
+          ),
+          decoration: glassInputDecoration(context: context, hintText: 'adb')
+              .copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: context.colors.goldPrimary,
+                  ),
+                  onPressed: () => onSaved(controller.text.trim()),
                 ),
-                onPressed: () => onSaved(controller.text.trim()),
               ),
-            ),
+        ),
       ),
     );
   }

@@ -23,16 +23,26 @@ class SettingsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+
+    // Size to the window instead of hard-coding 980x660. A fixed box taller
+    // than the viewport overflows, and Dialog centres the overflow — which
+    // clips the top and bottom of the content symmetrically and reads as
+    // "vertically centred". A fixed *width* on a narrow window squeezes the
+    // rail and panel until labels wrap mid-word.
+    final screen = MediaQuery.sizeOf(context);
+    final width = (screen.width - 72).clamp(360.0, 980.0).toDouble();
+    final height = (screen.height - 72).clamp(380.0, 700.0).toDouble();
+
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            width: 980,
-            height: 660,
+            width: width,
+            height: height,
             decoration: BoxDecoration(
               color: colors.scaffoldBackground.withAlpha(242),
               borderRadius: BorderRadius.circular(22),

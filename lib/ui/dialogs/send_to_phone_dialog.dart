@@ -9,13 +9,12 @@ import '../../widgets/shared/text_style_cache.dart';
 
 /// Which intent a payload should be delivered through.
 enum SendMode {
-  text('Text', Icons.chat_bubble_outline_rounded, 'text/plain'),
-  link('Link', Icons.link_rounded, null);
+  text('Text', Icons.chat_bubble_outline_rounded),
+  link('Link', Icons.link_rounded);
 
-  const SendMode(this.label, this.icon, this.mime);
+  const SendMode(this.label, this.icon);
   final String label;
   final IconData icon;
-  final String? mime;
 
   String get blurb => this == SendMode.text
       ? 'Shared as text — your phone offers apps that accept it.'

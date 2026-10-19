@@ -96,7 +96,7 @@ class ConnectionController extends ChangeNotifier {
       await Future<void>.delayed(const Duration(seconds: 2));
       final target2 = '$host:$port';
       if (!await Services.adb.connect(target2)) {
-        const reason = 'Switched to port $port, but the device refused to '
+        final reason = 'Switched to port $port, but the device refused to '
             'reconnect. Try pairing again.';
         Services.log.connection(LogLevel.error, reason);
         return reason;

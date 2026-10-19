@@ -133,7 +133,14 @@ enum ConnectionStatus {
 
 enum TransferKind { pull, push }
 
-enum TransferStatus { queued, running, done, failed, cancelled }
+enum TransferStatus {
+  queued,
+  running,
+  paused,
+  done,
+  failed,
+  cancelled,
+}
 
 class TransferItem {
   final String source; // device path (pull) or local path (push)

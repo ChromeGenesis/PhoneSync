@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../app.dart';
 import '../../core/adb/adb_models.dart';
+import '../../core/device/device_actions.dart';
 import '../../core/log/log_service.dart';
 import '../../services/app_services.dart';
 import '../../services/theme_service.dart';
@@ -14,6 +15,7 @@ import '../../widgets/glass/glass_select.dart';
 import '../../widgets/glass_snackbar.dart';
 import '../../widgets/shared/media_empty_state.dart';
 import '../../widgets/shared/text_style_cache.dart';
+import '../dialogs/file_actions.dart';
 import '../format.dart';
 import '../widgets/file_card.dart';
 
@@ -86,6 +88,12 @@ class _BrowseViewState extends State<BrowseView> {
             children: [
               _toolbar(context, browser, connected),
               const SizedBox(height: 10),
+              // Storage readout sits above the list rather than behind a menu:
+              // "why is my phone full" is the usual reason to open this app.
+              if (connected) ...[
+                const StoragePanel(),
+                const SizedBox(height: 10),
+              ],
               Expanded(
                 child: !connected
                     ? _disconnectedState(context)
@@ -422,6 +430,32 @@ class _BrowseViewState extends State<BrowseView> {
             ),
           ),
           const Spacer(),
+          // Bulk quick actions for the current selection.
+          if (selected.length == 1) ...[
+            _bulkAction(
+              context,
+              icon: Icons.open_in_new_rounded,
+              tooltip: 'Open on phone',
+              onTap: () => _bulkSingle(context, selected.first,
+                  (f) => DeviceActions.instance.open(f), 'Opened on phone'),
+            ),
+            _bulkAction(
+              context,
+              icon: Icons.ios_share_rounded,
+              tooltip: 'Share…',
+              onTap: () => _bulkSingle(context, selected.first,
+                  (f) => DeviceActions.instance.share(f), 'Share sheet opened'),
+            ),
+            const SizedBox(width: 6),
+          ],
+          _bulkAction(
+            context,
+            icon: Icons.delete_outline_rounded,
+            tooltip: 'Delete from phone',
+            danger: true,
+            onTap: () => _bulkDelete(context, selected),
+          ),
+          const SizedBox(width: 6),
           TextButton(
             onPressed: browser.clearSelection,
             child: Text(
@@ -457,6 +491,75 @@ class _BrowseViewState extends State<BrowseView> {
       initialDirectory: Services.config.saveDir,
     );
     if (dir != null) Services.config.setSaveDir(dir);
+  }
+
+  Widget _bulkAction(
+    BuildContext context, {
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) {
+    final colors = context.colors;
+    final tint = danger ? colors.roseDanger : colors.textSecondary;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: danger
+            ? colors.roseDanger.withAlpha(24)
+            : colors.surface.withAlpha(120),
+        borderRadius: BorderRadius.circular(9),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: onTap,
+          child: Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: danger
+                    ? colors.roseDanger.withAlpha(70)
+                    : colors.border.withAlpha(60),
+              ),
+            ),
+            child: Icon(icon, size: 16, color: tint),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _bulkSingle(
+    BuildContext context,
+    PhoneFile file,
+    Future<bool> Function(PhoneFile) action,
+    String okTitle,
+  ) async {
+    final ok = await action(file);
+    if (!context.mounted) return;
+    BrowserController.instance.clearSelection();
+    showAppSnack(
+      context,
+      type: ok ? SnackType.success : SnackType.error,
+      title: ok ? okTitle : 'Action failed',
+      message: file.name,
+    );
+  }
+
+  Future<void> _bulkDelete(BuildContext context, List<PhoneFile> selected) async {
+    final confirmed = await confirmDelete(context, selected);
+    if (confirmed != true || !context.mounted) return;
+    final removed = await DeviceActions.instance.delete(selected);
+    if (!context.mounted) return;
+    BrowserController.instance.clearSelection();
+    showAppSnack(
+      context,
+      type: removed > 0 ? SnackType.success : SnackType.error,
+      title: removed > 0 ? 'Deleted $removed file${removed == 1 ? '' : 's'}' : 'Delete failed',
+      message: removed > 0 ? 'Removed from the phone' : 'Nothing was removed',
+    );
   }
 
   void _pull(BuildContext context, List<PhoneFile> selected) {

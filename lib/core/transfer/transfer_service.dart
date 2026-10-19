@@ -19,8 +19,19 @@ class TransferService extends ChangeNotifier {
   final Set<String> _cancelled = {};
 
   List<TransferJob> get jobs => List.unmodifiable(_jobs);
-  List<TransferJob> get active =>
-      _jobs.where((j) => j.status == TransferStatus.queued || j.status == TransferStatus.running).toList();
+  List<TransferJob> get active => _jobs
+      .where((j) =>
+          j.status == TransferStatus.queued ||
+          j.status == TransferStatus.running ||
+          j.status == TransferStatus.paused)
+      .toList();
+
+  /// Anything that failed and can be retried.
+  List<TransferJob> get retryable =>
+      _jobs.where((j) => j.status == TransferStatus.failed).toList();
+
+  bool get hasPaused => _jobs.any((j) => j.status == TransferStatus.paused);
+
   bool get isBusy => _running || active.isNotEmpty;
 
   String enqueuePull(List<PhoneFile> files, String destDir) {
@@ -76,9 +87,131 @@ class TransferService extends ChangeNotifier {
     }
   }
 
+  /// Pauses a queued job, or the whole queue via [all]. A running job is left
+  /// alone: interrupting a half-written file mid-transfer is worse than
+  /// finishing it, so pause only takes effect at the next item boundary.
+  void pause(String jobId) {
+    final job = _jobs.firstWhere((j) => j.id == jobId, orElse: () => _dummy);
+    if (identical(job, _dummy)) return;
+    if (job.status != TransferStatus.queued) return;
+    job.status = TransferStatus.paused;
+    notifyListeners();
+    LogService.instance.transfer(LogLevel.info, 'Paused: ${job.label}');
+  }
+
+  void pauseAll() {
+    var n = 0;
+    for (final job in _jobs) {
+      if (job.status == TransferStatus.queued) {
+        job.status = TransferStatus.paused;
+        n++;
+      }
+    }
+    if (n == 0) return;
+    notifyListeners();
+    LogService.instance.transfer(LogLevel.info, 'Paused $n queued job(s)');
+  }
+
+  /// Resumes one job, or everything paused via [all].
+  void resume(String jobId) {
+    final job = _jobs.firstWhere((j) => j.id == jobId, orElse: () => _dummy);
+    if (identical(job, _dummy)) return;
+    if (job.status != TransferStatus.paused) return;
+    job.status = TransferStatus.queued;
+    job.error = null;
+    notifyListeners();
+    _pump();
+  }
+
+  void resumeAll() {
+    var n = 0;
+    for (final job in _jobs) {
+      if (job.status == TransferStatus.paused) {
+        job.status = TransferStatus.queued;
+        job.error = null;
+        n++;
+      }
+    }
+    if (n == 0) return;
+    notifyListeners();
+    LogService.instance.transfer(LogLevel.info, 'Resumed $n job(s)');
+    _pump();
+  }
+
+  /// Re-queues only the items of a failed job that did not transfer.
+  ///
+  /// The successful items stay counted as done, so a retry of a 50-file job
+  /// that failed on file 49 re-sends one file rather than all fifty.
+  void retryFailed(String jobId) {
+    final index = _jobs.indexWhere((j) => j.id == jobId);
+    if (index < 0) return;
+    final job = _jobs[index];
+    if (job.status != TransferStatus.failed && job.status != TransferStatus.cancelled) {
+      return;
+    }
+    final failedItems = job.items.where((i) => i.sentBytes <= 0).toList();
+    if (failedItems.isEmpty) {
+      LogService.instance.transfer(
+          LogLevel.info, 'Nothing to retry in ${job.label}');
+      return;
+    }
+    job.items
+      ..clear()
+      ..addAll(failedItems);
+    job.doneItems = 0;
+    job.totalBytes = failedItems.fold(0, (s, i) => s + i.totalBytes);
+    job.sentBytes = 0;
+    job.startedAt = DateTime.now();
+    job.finishedAt = null;
+    job.error = null;
+    job.status = TransferStatus.queued;
+    notifyListeners();
+    LogService.instance.transfer(LogLevel.info,
+        'Retrying ${failedItems.length} item(s) in ${job.label}');
+    _pump();
+  }
+
+  void retryAllFailed() {
+    final ids = _jobs
+        .where((j) => j.status == TransferStatus.failed)
+        .map((j) => j.id)
+        .toList(growable: false);
+    for (final id in ids) {
+      retryFailed(id);
+    }
+  }
+
+  /// Moves a queued or paused job within the queue.
+  ///
+  /// Newest-first display means "up" is later in [_jobs]. Jobs that already
+  /// started are pinned: reordering a running job would silently change what
+  /// the user queued behind it.
+  bool move(String jobId, int delta) {
+    final index = _jobs.indexWhere((j) => j.id == jobId);
+    if (index < 0) return false;
+    final job = _jobs[index];
+    if (job.status != TransferStatus.queued && job.status != TransferStatus.paused) {
+      return false;
+    }
+    final target = index + delta;
+    if (target < 0 || target >= _jobs.length) return false;
+    if (_jobs[target].status != TransferStatus.queued &&
+        _jobs[target].status != TransferStatus.paused) {
+      return false;
+    }
+    _jobs.removeAt(index);
+    _jobs.insert(target, job);
+    notifyListeners();
+    return true;
+  }
+
   void clearFinished() {
-    _jobs.removeWhere(
-        (j) => j.status != TransferStatus.queued && j.status != TransferStatus.running);
+    // Paused is still pending work, not finished work — clearing it here would
+    // silently throw away a queue the user deliberately parked.
+    _jobs.removeWhere((j) =>
+        j.status != TransferStatus.queued &&
+        j.status != TransferStatus.running &&
+        j.status != TransferStatus.paused);
     notifyListeners();
   }
 

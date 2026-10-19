@@ -35,9 +35,40 @@ class TransfersView extends StatelessWidget {
                 children: [
                   const SectionLabel('Transfers'),
                   const Spacer(),
+                  if (service.hasPaused) ...[
+                    TextButton.icon(
+                      onPressed: service.resumeAll,
+                      icon: const Icon(Icons.play_arrow_rounded, size: 15),
+                      label: Text('Resume all',
+                          style: OutfitStyle.get(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: colors.emeraldLive)),
+                    ),
+                    TextButton.icon(
+                      onPressed: service.pauseAll,
+                      icon: const Icon(Icons.pause_rounded, size: 15),
+                      label: Text('Pause all',
+                          style: OutfitStyle.get(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: colors.textSecondary)),
+                    ),
+                  ],
+                  if (service.retryable.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: service.retryAllFailed,
+                      icon: const Icon(Icons.refresh_rounded, size: 15),
+                      label: Text('Retry ${service.retryable.length}',
+                          style: OutfitStyle.get(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: colors.goldPrimary)),
+                    ),
                   if (jobs.any((j) =>
                       j.status != TransferStatus.queued &&
-                      j.status != TransferStatus.running))
+                      j.status != TransferStatus.running &&
+                      j.status != TransferStatus.paused))
                     TextButton(
                       onPressed: service.clearFinished,
                       child: Text('Clear finished',
@@ -70,6 +101,48 @@ class TransfersView extends StatelessWidget {
   }
 }
 
+class _JobButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final Color? tint;
+  final bool enabled;
+
+  const _JobButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.tint,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final color = !enabled
+        ? colors.textMuted.withAlpha(90)
+        : tint ?? colors.textSecondary;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(7),
+        child: Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: colors.surface.withAlpha(100),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(color: colors.border.withAlpha(50)),
+          ),
+          child: Icon(icon, size: 15, color: color),
+        ),
+      ),
+    );
+  }
+}
+
 class _JobCard extends StatelessWidget {
   final TransferJob job;
   const _JobCard({required this.job});
@@ -77,6 +150,7 @@ class _JobCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final service = Services.transfers;
     final total = job.totalBytes;
     final sent = job.sentBytes;
     final progress = total > 0 ? (sent / total).clamp(0.0, 1.0) : null;
@@ -84,8 +158,11 @@ class _JobCard extends StatelessWidget {
         ? 0.0
         : job.doneItems / job.items.length;
     final running = job.status == TransferStatus.running;
+    final paused = job.status == TransferStatus.paused;
+    final pending = job.status == TransferStatus.queued || paused;
     final (statusColor, statusLabel) = switch (job.status) {
       TransferStatus.queued => (colors.textMuted, 'QUEUED'),
+      TransferStatus.paused => (colors.textGold, 'PAUSED'),
       TransferStatus.running => (colors.goldPrimary, 'RUNNING'),
       TransferStatus.done => (colors.emeraldLive, 'DONE'),
       TransferStatus.failed => (colors.roseDanger, 'FAILED'),
@@ -172,6 +249,40 @@ class _JobCard extends StatelessWidget {
                       letterSpacing: 0.4),
                 ),
               ),
+              const SizedBox(width: 8),
+              _JobButton(
+                icon: Icons.arrow_upward_rounded,
+                tooltip: 'Move up',
+                // Newest-first display: moving up means later in the list.
+                onTap: () => service.move(job.id, 1),
+                enabled: pending,
+              ),
+              _JobButton(
+                icon: Icons.arrow_downward_rounded,
+                tooltip: 'Move down',
+                onTap: () => service.move(job.id, -1),
+                enabled: pending,
+              ),
+              if (paused)
+                _JobButton(
+                  icon: Icons.play_arrow_rounded,
+                  tooltip: 'Resume',
+                  tint: colors.emeraldLive,
+                  onTap: () => service.resume(job.id),
+                )
+              else if (pending)
+                _JobButton(
+                  icon: Icons.pause_rounded,
+                  tooltip: 'Pause',
+                  onTap: () => service.pause(job.id),
+                ),
+              if (job.status == TransferStatus.failed)
+                _JobButton(
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Retry failed items',
+                  tint: colors.goldPrimary,
+                  onTap: () => service.retryFailed(job.id),
+                ),
               if (running) ...[
                 const SizedBox(width: 8),
                 InkWell(

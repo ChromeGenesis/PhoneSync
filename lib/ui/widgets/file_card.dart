@@ -4,10 +4,11 @@ import '../../core/adb/adb_models.dart';
 import '../../core/thumbnails/thumbnail_service.dart';
 import '../../services/theme_service.dart';
 import '../../state/browser_controller.dart';
-import '../dialogs/preview_dialog.dart';
-import '../format.dart';
 import '../../widgets/shared/hover_builder.dart';
 import '../../widgets/shared/text_style_cache.dart';
+import '../dialogs/file_actions.dart';
+import '../dialogs/preview_dialog.dart';
+import '../format.dart';
 
 Color extColor(String ext) {
   const map = {
@@ -170,6 +171,14 @@ class FileCard extends StatelessWidget {
                             tooltip: 'Preview',
                             onTap: () => showPreview(context, file),
                           ),
+                        // Quick actions (open / share / wallpaper / delete).
+                        // Only on hover or when selected, so it never crowds
+                        // the resting state of a long list.
+                        AnimatedOpacity(
+                          opacity: hovered || isSelected ? 1 : 0,
+                          duration: const Duration(milliseconds: 130),
+                          child: FileActionMenu(file: file),
+                        ),
                         SizedBox(
                           width: 30,
                           height: 30,

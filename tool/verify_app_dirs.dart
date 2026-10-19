@@ -7,6 +7,10 @@
 //
 //   env -i HOME="$HOME" dart run tool/verify_app_dirs.dart
 
+// Relative import for the same reason as verify_adb.dart: runnable with a bare
+// Dart SDK, no Flutter or package config required.
+// ignore_for_file: avoid_relative_lib_imports
+
 import 'dart:io';
 
 import '../lib/core/config/app_dirs.dart';

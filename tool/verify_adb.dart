@@ -7,6 +7,12 @@
 //
 // Compare against the same script in a normal shell — both should succeed.
 
+// These scripts import lib/ relatively rather than via `package:phonesync/` on
+// purpose: they are meant to be runnable with a bare Dart SDK, including on a
+// machine with no Flutter installed and therefore no package config. A
+// `package:` import would need `flutter pub get` to have been run first.
+// ignore_for_file: avoid_relative_lib_imports
+
 import 'dart:io';
 
 import '../lib/core/adb/adb_client.dart';
@@ -15,7 +21,7 @@ Future<void> main() async {
   final adb = AdbClient.instance;
   final path = Platform.environment['PATH'];
 
-  stdout.writeln('PATH env var: ${path == null ? '(unset)' : path}');
+  stdout.writeln('PATH env var: ${path ?? '(unset)'}');
   stdout.writeln('configured:    ${adb.adbConfigured}');
   stdout.writeln('available:     ${adb.adbAvailable}');
   stdout.writeln('resolved:      ${adb.adbResolved ?? '-'}');

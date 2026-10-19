@@ -31,13 +31,18 @@ class SettingsDialog extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            width: 860,
+            width: 980,
+            height: 660,
             decoration: BoxDecoration(
               color: colors.scaffoldBackground.withAlpha(242),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(color: colors.border.withAlpha(70)),
               boxShadow: [
-                BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 40, offset: const Offset(0, 18)),
+                BoxShadow(
+                  color: Colors.black.withAlpha(90),
+                  blurRadius: 40,
+                  offset: const Offset(0, 18),
+                ),
               ],
             ),
             child: Column(
@@ -54,25 +59,39 @@ class SettingsDialog extends StatelessWidget {
                           color: colors.goldPrimary.withAlpha(30),
                           borderRadius: BorderRadius.circular(9),
                         ),
-                        child: Icon(Icons.tune_rounded, size: 16, color: colors.goldPrimary),
+                        child: Icon(
+                          Icons.tune_rounded,
+                          size: 16,
+                          color: colors.goldPrimary,
+                        ),
                       ),
                       const SizedBox(width: 11),
                       Text(
                         'Settings',
                         style: OutfitStyle.get(
-                            fontSize: 16, fontWeight: FontWeight.w800, color: colors.textPrimary),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textPrimary,
+                        ),
                       ),
                       const Spacer(),
                       // Surface the shortcut in the one place it is relevant.
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: colors.surface.withAlpha(90),
                           borderRadius: BorderRadius.circular(7),
-                          border: Border.all(color: colors.border.withAlpha(50)),
+                          border: Border.all(
+                            color: colors.border.withAlpha(50),
+                          ),
                         ),
                         child: Text(
-                          Platform.isMacOS ? '⌘S to reopen' : 'Ctrl+S to reopen',
+                          Platform.isMacOS
+                              ? '⌘S to reopen'
+                              : 'Ctrl+S to reopen',
                           style: FiraCodeStyle.get(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,

@@ -53,8 +53,8 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
       _codeController.text = digits;
       _codeController.selection =
           sel.baseOffset >= 0 && sel.baseOffset <= digits.length
-              ? TextSelection.collapsed(offset: sel.baseOffset)
-              : TextSelection.collapsed(offset: digits.length);
+          ? TextSelection.collapsed(offset: sel.baseOffset)
+          : TextSelection.collapsed(offset: digits.length);
     }
     setState(() {});
   }
@@ -87,23 +87,30 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
     final service = _selected;
     if (service == null || !_codeComplete || _busy) return;
     setState(() => _busy = true);
-    final error = await _conn.pairWithCode(service.hostPort, _codeController.text);
+    final error = await _conn.pairWithCode(
+      service.hostPort,
+      _codeController.text,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     if (error != null) {
-      GlassSnackbar.show(context,
-          type: SnackType.error,
-          title: 'Pairing failed',
-          message: error);
+      GlassSnackbar.show(
+        context,
+        type: SnackType.error,
+        title: 'Pairing failed',
+        message: error,
+      );
       return;
     }
     _codeController.clear();
     await _conn.rescan();
     if (!mounted) return;
-    GlassSnackbar.show(context,
-        type: SnackType.success,
-        title: 'Paired',
-        message: 'This Mac is now trusted by ${service.deviceLabel}.');
+    GlassSnackbar.show(
+      context,
+      type: SnackType.success,
+      title: 'Paired',
+      message: 'This Mac is now trusted by ${service.deviceLabel}.',
+    );
   }
 
   Future<void> _enableTcpip() async {
@@ -117,7 +124,8 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
       context,
       type: error == null ? SnackType.success : SnackType.error,
       title: error == null ? 'TCP/IP mode on' : 'Could not switch',
-      message: error ??
+      message:
+          error ??
           'Listening on $port. This survives toggling Wireless debugging off, '
               'but not a reboot — pair again after the phone restarts.',
     );
@@ -128,16 +136,16 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
     final colors = context.colors;
     final connected = _conn.isConnected;
 
-    return _Section(
-      title: 'Wireless Pairing',
-      icon: Icons.qr_code_2_rounded,
-      subtitle: 'Connect a phone over WiFi — no USB, no terminal.',
+    // No card chrome: the Settings panel already renders the "Pairing" title and
+    // blurb, so a second header here would just say the same thing twice.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Discovery ───────────────────────────────────────────────────────
         _Step(
           index: 1,
           title: 'Turn on Wireless debugging',
-          body: 'On the phone: Developer options → Wireless debugging. '
+          body:
+              'On the phone: Developer options → Wireless debugging. '
               'It advertises itself over the network automatically.',
           trailing: GlassButton(
             label: _scanning ? 'Scanning…' : 'Scan',
@@ -156,7 +164,8 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
         _Step(
           index: 3,
           title: 'Optional — fixed port',
-          body: 'Wireless debugging\'s port changes every time the toggle is '
+          body:
+              'Wireless debugging\'s port changes every time the toggle is '
               'switched. Switching to TCP/IP mode pins it to $defaultTcpipPort, '
               'which is what makes the address stable. Still not reboot-proof: '
               'the phone drops back to USB-only after a restart.',
@@ -171,7 +180,8 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
           const SizedBox(height: 12),
           _Hint(
             icon: Icons.info_outline_rounded,
-            text: 'Pairing needs the phone awake and on the same WiFi network. '
+            text:
+                'Pairing needs the phone awake and on the same WiFi network. '
                 'Step 3 needs an active connection first.',
             color: colors.textMuted,
           ),
@@ -256,7 +266,10 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
               Text(
                 _selected?.deviceLabel ?? 'Device',
                 style: OutfitStyle.get(
-                    fontSize: 11.5, fontWeight: FontWeight.w700, color: colors.textSecondary),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: colors.textSecondary,
+                ),
               ),
               const SizedBox(width: 4),
               Icon(Icons.swap_horiz_rounded, size: 13, color: colors.textMuted),
@@ -271,7 +284,10 @@ class _WirelessPairingCardState extends State<WirelessPairingCard> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final digits = (data?.text ?? '').replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return;
-    _codeController.text = digits.substring(0, digits.length.clamp(0, _codeLength));
+    _codeController.text = digits.substring(
+      0,
+      digits.length.clamp(0, _codeLength),
+    );
   }
 }
 
@@ -305,7 +321,9 @@ class PairingCodeInput extends StatelessWidget {
             color: colors.inputBackground,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: text.length == length ? colors.emeraldLive : colors.inputBorder,
+              color: text.length == length
+                  ? colors.emeraldLive
+                  : colors.inputBorder,
               width: text.length == length ? 1.5 : 1.0,
             ),
           ),
@@ -479,79 +497,6 @@ class _Hint extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Card chrome, matching the other Settings sections.
-class _Section extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-  final List<Widget> children;
-
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.children,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surface.withAlpha(45),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border.withAlpha(30)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: colors.goldPrimary.withAlpha(30),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 15, color: colors.goldPrimary),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: OutfitStyle.get(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle!,
-                        style: OutfitStyle.get(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textMuted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
     );
   }
 }

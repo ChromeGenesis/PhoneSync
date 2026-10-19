@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../adb/adb_client.dart';
+import '../adb/adb_models.dart';
 import 'app_dirs.dart';
 
 /// Single source of truth for every persisted setting.

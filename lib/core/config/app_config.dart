@@ -37,6 +37,7 @@ class AppConfig extends ChangeNotifier {
     'Pictures',
   ];
   int pollIntervalSeconds = 3;
+  bool persistActivityLog = true;
 
   bool _loaded = false;
   bool get loaded => _loaded;
@@ -60,6 +61,8 @@ class AppConfig extends ChangeNotifier {
       pcFavorites =
           ((map['pcFavorites'] as List?)?.cast<String>()) ?? pcFavorites;
       pollIntervalSeconds = (map['pollIntervalSeconds'] as int?) ?? pollIntervalSeconds;
+      persistActivityLog =
+          (map['persistActivityLog'] as bool?) ?? persistActivityLog;
       if (saveDir.isEmpty) saveDir = _defaultSaveDir();
     } catch (_) {
       saveDir = _defaultSaveDir();
@@ -84,6 +87,7 @@ class AppConfig extends ChangeNotifier {
         'phonePaths': phonePaths,
         'pcFavorites': pcFavorites,
         'pollIntervalSeconds': pollIntervalSeconds,
+        'persistActivityLog': persistActivityLog,
       }));
     } catch (_) {}
     notifyListeners();
@@ -114,6 +118,12 @@ class AppConfig extends ChangeNotifier {
     final v = s.clamp(2, 60);
     if (v == pollIntervalSeconds) return;
     pollIntervalSeconds = v;
+    save();
+  }
+
+  void setPersistActivityLog(bool v) {
+    if (v == persistActivityLog) return;
+    persistActivityLog = v;
     save();
   }
 

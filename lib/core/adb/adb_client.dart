@@ -154,6 +154,7 @@ class AdbClient {
   Future<AdbResult> run(
     List<String> args, {
     Duration timeout = const Duration(seconds: 15),
+    String? stdinData,
   }) async {
     final exe = _resolve();
     if (exe.isEmpty) {
@@ -168,6 +169,17 @@ class AdbClient {
       // an unkillable timed-out process stays alive and keeps holding a slot
       // on the device transport, which wedges every later command.
       proc = await Process.start(exe, args);
+      if (stdinData != null) {
+        // `adb pair` blocks on an "Enter pairing code:" prompt, so the code has
+        // to go in over stdin. A write can still fail with EPIPE when adb bails
+        // before prompting (stale port, rejected key), which must not take the
+        // call down — the exit code carries the real answer.
+        try {
+          proc.stdin.write(stdinData);
+          await proc.stdin.flush();
+          await proc.stdin.close();
+        } catch (_) {}
+      }
       final out = StringBuffer();
       final err = StringBuffer();
       final outSub = proc.stdout.transform(utf8.decoder).listen(out.write);
@@ -255,6 +267,46 @@ class AdbClient {
   Future<void> disconnect(String hostPort) async {
     await run(['disconnect', hostPort]);
   }
+
+  // ------------------------------------------------------- wireless pairing
+
+  /// Devices currently advertising ADB over mDNS.
+  ///
+  /// This is the difference between "read the IP and port off the phone and
+  /// type them into a terminal" and "it just found it" — the phone publishes
+  /// these itself the moment Wireless debugging is enabled.
+  Future<List<MdnsService>> mdnsServices() async {
+    final res = await run(['mdns', 'services'], timeout: const Duration(seconds: 10));
+    if (!res.ok) return const [];
+    final out = <MdnsService>[];
+    for (final line in res.stdout.split('\n')) {
+      final svc = MdnsService.tryParse(line);
+      if (svc != null) out.add(svc);
+    }
+    return out;
+  }
+
+  /// `adb pair host:port` — links this machine to a phone running Android 11+
+  /// wireless debugging. [code] is the 6-digit code from the phone's
+  /// "Pair device with pairing code" screen.
+  ///
+  /// The result is written to the machine's adb key file, so this only has to
+  /// happen once per phone, ever.
+  Future<AdbResult> pair(String hostPort, String code) => run(
+        ['pair', hostPort],
+        stdinData: '$code\n',
+        timeout: const Duration(seconds: 20),
+      );
+
+  /// `adb tcpip <port>` — restarts adbd listening on a fixed TCP port.
+  ///
+  /// Useful because wireless debugging's own port rotates every time the toggle
+  /// is switched. This does *not* survive a reboot: adbd reverts to USB-only,
+  /// so after a restart the phone has to be paired again or USB used once.
+  Future<AdbResult> enableTcpip(int port, {String? deviceId}) => run(
+        [if (deviceId != null) ...['-s', deviceId], 'tcpip', '$port'],
+        timeout: const Duration(seconds: 20),
+      );
 
   // ---------------------------------------------------------------- listing
 

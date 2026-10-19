@@ -4,7 +4,6 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../app.dart';
-import '../core/adb/adb_client.dart';
 import '../core/log/log_service.dart';
 import '../services/app_services.dart';
 import '../services/theme_service.dart';
@@ -12,8 +11,10 @@ import '../state/browser_controller.dart';
 import '../state/connection_controller.dart';
 import '../widgets/glass_snackbar.dart';
 import '../widgets/shared/hover_builder.dart';
+import '../widgets/shared/scroll_hint_caret.dart';
 import '../widgets/shared/section_label.dart';
 import '../widgets/shared/text_style_cache.dart';
+import 'dialogs/send_to_phone_dialog.dart';
 import 'home_shell.dart';
 
 /// 208px glass sidebar: browse locations, discovered phone folders, and
@@ -82,13 +83,14 @@ class AppSidebar extends StatelessWidget {
               Expanded(
                 child: connected
                     // Bottom fade signals the folder list scrolls instead of
-                    // letting the last chip collide with the section below.
+                    // letting the last chip collide with the section below;
+                    // the caret over it says so outright.
                     ? ShaderMask(
                         shaderCallback: (rect) => const LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
-                          stops: [0, 0.86, 1],
+                          stops: [0, 0.82, 1],
                         ).createShader(rect),
                         blendMode: BlendMode.dstIn,
                         child: _folderChips(context, browser),
@@ -160,20 +162,23 @@ class AppSidebar extends StatelessWidget {
       ...saved.map((p) => (p.split('/').where((s) => s.isNotEmpty).last, p)),
     }.toList(growable: false);
     final isFolderActive = browser.location.id == BrowseViewId.folder;
-    return ListView.builder(
+    return ScrollHintCaret(
       padding: const EdgeInsets.only(bottom: 4),
-      itemCount: entries.length,
-      itemBuilder: (context, i) {
-        final (label, path) = entries[i];
-        final active = isFolderActive && browser.location.paths.first == path;
-        return _navButton(context, Icons.folder_outlined, label, () {
-          onTabSelected(ShellTab.browse);
-          browser.openLocation(BrowseLocation.deviceFolder(path));
+      builder: (context, controller) => ListView.builder(
+        controller: controller,
+        itemCount: entries.length,
+        itemBuilder: (context, i) {
+          final (label, path) = entries[i];
+          final active = isFolderActive && browser.location.paths.first == path;
+          return _navButton(context, Icons.folder_outlined, label, () {
+            onTabSelected(ShellTab.browse);
+            browser.openLocation(BrowseLocation.deviceFolder(path));
+          },
+              active: active,
+              enabled: true,
+              dense: true);
         },
-            active: active,
-            enabled: true,
-            dense: true);
-      },
+      ),
     );
   }
 
@@ -313,53 +318,22 @@ class AppSidebar extends StatelessWidget {
   }
 
   Future<void> _sendText(BuildContext context) async {
-    final controller = TextEditingController();
-    final text = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.colors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Send to Phone',
-            style: OutfitStyle.get(
-                fontSize: 16, fontWeight: FontWeight.bold, color: context.colors.textPrimary)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          minLines: 1,
-          style: OutfitStyle.get(fontSize: 13, color: context.colors.textPrimary),
-          decoration: const InputDecoration(
-            hintText: 'Paste a link or any text…',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: OutfitStyle.get(fontSize: 12, color: context.colors.textSecondary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text('Send', style: OutfitStyle.get(fontSize: 12, fontWeight: FontWeight.bold, color: context.colors.goldPrimary)),
-          ),
-        ],
-      ),
-    );
-    if (text == null || text.isEmpty) return;
-    final isUrl = Uri.tryParse(text)?.hasScheme ?? false;
-    final ok = isUrl
-        ? await AdbClient.instance.openUrl(text)
-        : await AdbClient.instance.sendText(text);
+    final result = await SendToPhoneDialog.show(context);
+    if (result == null || !context.mounted) return;
     Services.log.connection(
-        ok ? LogLevel.success : LogLevel.error,
-        '${isUrl ? 'Opened URL' : 'Sent text'} on device${ok ? '' : ' — intent failed'}');
-    if (context.mounted) {
-      showAppSnack(
-        context,
-        type: ok ? SnackType.success : SnackType.error,
-        title: ok ? 'Sent to phone' : 'Send failed',
-        message: isUrl ? text : (text.length > 60 ? '${text.substring(0, 60)}…' : text),
-      );
-    }
+      result.ok ? LogLevel.success : LogLevel.error,
+      result.ok
+          ? 'Sent to phone'
+          : 'Send to phone failed — the device rejected the intent',
+    );
+    final payload =
+        result.payload.length > 60 ? '${result.payload.substring(0, 60)}…' : result.payload;
+    showAppSnack(
+      context,
+      type: result.ok ? SnackType.success : SnackType.error,
+      title: result.ok ? 'Sent to phone' : 'Send failed',
+      message: payload,
+    );
   }
 
   Future<void> _pickSaveFolder(BuildContext context) async {

@@ -236,7 +236,11 @@ class AppThemeService extends ChangeNotifier {
 
   static const String _storageKey = 'phonesync_theme_mode';
   static const String _accentKey = 'phonesync_accent';
-  ThemeMode _themeMode = ThemeMode.dark;
+
+  /// Follow the OS by default. A desktop app that opens dark regardless of the
+  /// user's system appearance is the most jarring default there is — a
+  /// maximized window in light mode looks broken.
+  ThemeMode _themeMode = ThemeMode.system;
   AccentPreset _accent = AccentPreset.amber;
 
   ThemeMode get themeMode => _themeMode;
@@ -278,6 +282,9 @@ class AppThemeService extends ChangeNotifier {
     } catch (e) {
       Logger.error('Error loading theme mode: $e');
     }
+    // Sync even when nothing was saved: on first launch the OS appearance is
+    // the source of truth and the window chrome has to match it.
+    _syncWindowTheme();
   }
 
   Brightness get resolvedBrightness {

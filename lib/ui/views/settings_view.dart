@@ -9,6 +9,7 @@ import '../../widgets/glass/glass_input.dart';
 import '../../widgets/shared/hover_builder.dart';
 import '../../widgets/shared/section_label.dart';
 import '../../widgets/shared/text_style_cache.dart';
+import 'wireless_pairing_card.dart';
 
 /// Settings: connection, storage, appearance. Every mutation goes through
 /// AppConfig (the SSOT) which persists immediately.
@@ -43,6 +44,12 @@ class SettingsView extends StatelessWidget {
                     _row(context, 'Auto-connect on launch',
                         _toggle(context, config.autoConnect, config.setAutoConnect),
                         expand: false),
+                    _row(context, 'Persist activity log',
+                        _toggle(context, config.persistActivityLog, (v) {
+                          config.setPersistActivityLog(v);
+                          Services.log.setPersistence(v);
+                        }),
+                        expand: false),
                     const SizedBox(height: 8),
                     const SectionLabel('Wireless scan addresses', fontSize: 10),
                     const SizedBox(height: 6),
@@ -50,6 +57,8 @@ class SettingsView extends StatelessWidget {
                     _actionLink(context, Icons.add, 'Add address…', () => _addAddress(context)),
                   ],
                 ),
+                const SizedBox(height: 16),
+                const WirelessPairingCard(),
                 const SizedBox(height: 16),
                 _card(
                   context,
@@ -315,9 +324,11 @@ class SettingsView extends StatelessWidget {
         return Row(
           children: [
             for (final (mode, label) in [
-              (ThemeMode.dark, 'Dark'),
-              (ThemeMode.light, 'Light'),
+              // System first: it is the default, so it is what most people
+              // keep, and the order should say so.
               (ThemeMode.system, 'System'),
+              (ThemeMode.light, 'Light'),
+              (ThemeMode.dark, 'Dark'),
             ])
               Padding(
                 padding: const EdgeInsets.only(right: 6),

@@ -15,5 +15,11 @@ class Services {
   static final TransferService transfers = TransferService.instance;
   static final ThumbnailService thumbnails = ThumbnailService.instance;
 
-  static Future<void> init() => config.load();
+  /// Startup order matters: config first (it carries the log-persistence
+  /// preference), then the log's own restore from disk.
+  static Future<void> init() async {
+    await config.load();
+    log.setPersistence(config.persistActivityLog);
+    await log.load();
+  }
 }

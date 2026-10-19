@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/adb/adb_client.dart';
 import '../core/adb/adb_models.dart';
 import '../core/log/log_service.dart';
 import '../services/app_services.dart';
@@ -26,6 +27,114 @@ class ConnectionController extends ChangeNotifier {
 
   /// Why the adb binary could not be located, when that's the blocker.
   String? get adbFailure => Services.adb.adbResolveFailure;
+
+  // ------------------------------------------------------ wireless pairing
+
+  /// Pairing is a slow, network-dependent operation; the Settings UI binds to
+  /// this so it can disable itself and show progress.
+  bool _pairing = false;
+  bool get isPairing => _pairing;
+
+  /// Devices seen on mDNS during the last [discoverWireless].
+  List<MdnsService> _discovered = const [];
+  List<MdnsService> get discovered => _discovered;
+
+  /// Refreshes the list of phones advertising wireless debugging.
+  Future<List<MdnsService>> discoverWireless() async {
+    final services = await Services.adb.mdnsServices();
+    _discovered = services;
+    notifyListeners();
+    return services;
+  }
+
+  /// Runs `adb pair` with the 6-digit code from the phone. Returns null on
+  /// success, or a human-readable reason it failed.
+  Future<String?> pairWithCode(String hostPort, String code) async {
+    _pairing = true;
+    notifyListeners();
+    try {
+      final res = await Services.adb.pair(hostPort, code.trim());
+      if (res.ok && res.stdout.contains('Successfully paired')) {
+        Services.log.connection(LogLevel.success, 'Paired with $hostPort');
+        // The pairing endpoint disappears once used; the connect one remains.
+        await discoverWireless();
+        return null;
+      }
+      final reason = _describeFailure(res, 'Pairing failed');
+      Services.log.connection(LogLevel.error, 'Pairing $hostPort failed — $reason');
+      return reason;
+    } finally {
+      _pairing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Runs `adb tcpip <port>` against the connected device, then repoints the app
+  /// at the new fixed address. Returns null on success, or a reason.
+  ///
+  /// This is the recovery path after a reboot, when adbd drops back to USB-only:
+  /// pair again, then switch to TCP mode to get back a stable port.
+  Future<String?> enableTcpip(int port) async {
+    final host = lastKnownHost;
+    _pairing = true;
+    notifyListeners();
+    try {
+      // Target a specific transport when we have one — `adb tcpip` refuses to
+      // pick for itself when several devices are attached.
+      final device = _device;
+      final target =
+          device != null && !device.id.contains('.') ? device.id : null;
+      final res = await Services.adb.enableTcpip(port, deviceId: target);
+      if (!res.ok || !res.stdout.contains('restarting in TCP mode')) {
+        final reason = _describeFailure(res, 'Could not switch to TCP mode');
+        Services.log.connection(LogLevel.error, 'adb tcpip $port failed — $reason');
+        return reason;
+      }
+
+      // The old transport is torn down by the restart, so give the new port a
+      // moment to come up rather than reusing the dead one.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final target2 = '$host:$port';
+      if (!await Services.adb.connect(target2)) {
+        const reason = 'Switched to port $port, but the device refused to '
+            'reconnect. Try pairing again.';
+        Services.log.connection(LogLevel.error, reason);
+        return reason;
+      }
+      final refreshed = await Services.adb.listDevices();
+      final match = refreshed.where((d) => d.id == target2).firstOrNull;
+      if (match != null) {
+        await _adopt(match, reason: 'TCP/IP mode on port $port');
+      }
+      Services.config.setScanAddresses([
+        for (final a in Services.config.scanAddresses)
+          if (a.startsWith('$host:')) target2 else a,
+      ]);
+      return null;
+    } finally {
+      _pairing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Best guess at the phone's host address, for actions that need one.
+  String get lastKnownHost {
+    final known = _device?.id ??
+        Services.config.lastDeviceAddress ??
+        Services.config.scanAddresses.firstOrNull ??
+        '';
+    return known.contains(':') ? known.split(':').first : known;
+  }
+
+  String _describeFailure(AdbResult res, String fallback) {
+    final text = '${res.stderr}\n${res.stdout}'.trim();
+    if (text.isEmpty) return fallback;
+    // adb's failures are one-liners; keep the most informative line.
+    return text
+        .split('\n')
+        .map((l) => l.trim())
+        .lastWhere((l) => l.isNotEmpty, orElse: () => fallback);
+  }
 
   /// Try stored address, then configured scan list, then USB.
   Future<void> autoConnect() async {

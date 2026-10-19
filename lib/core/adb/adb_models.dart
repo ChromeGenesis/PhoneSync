@@ -1,6 +1,52 @@
 /// Domain models shared across the ADB layer, controllers, and UI.
 library;
 
+/// A service a device advertises over mDNS.
+///
+/// Wireless debugging (Android 11+) publishes two of these per device: a long-
+/// lived `_adb-tls-connect` endpoint and a short-lived `_adb-tls-pairing`
+/// endpoint that only appears while the "Pair device with pairing code" dialog
+/// is open. Discovering them is what lets the app find a phone without the user
+/// having to read an IP and port off the screen and type them in.
+class MdnsService {
+  final String name; // e.g. adb-R3CN50JG4KJ-iQyX0R
+  final String type; // _adb-tls-connect._tcp | _adb-tls-pairing._tcp
+  final String hostPort; // e.g. 192.168.0.2:40759
+
+  const MdnsService({
+    required this.name,
+    required this.type,
+    required this.hostPort,
+  });
+
+  bool get isPairing => type.contains('pairing');
+  bool get isConnect => type.contains('connect');
+
+  String get host => hostPort.split(':').first;
+  int? get port => int.tryParse(hostPort.split(':').last);
+
+  /// The device-ish half of the mDNS name ("R3CN50JG4KJ"), which is far more
+  /// recognisable than the trailing hash.
+  String get deviceLabel {
+    final bare = name.replaceFirst('adb-', '');
+    final dash = bare.lastIndexOf('-');
+    return dash > 0 ? bare.substring(0, dash) : bare;
+  }
+
+  /// `adb mdns services` prints one tab-separated record per line, under a
+  /// "List of discovered mdns services" header.
+  static MdnsService? tryParse(String line) {
+    final parts = line.trim().split('\t');
+    if (parts.length < 3) return null;
+    if (!parts[1].startsWith('_adb-')) return null;
+    if (!parts[2].contains(':')) return null;
+    return MdnsService(name: parts[0], type: parts[1], hostPort: parts[2]);
+  }
+
+  @override
+  String toString() => '$deviceLabel ($hostPort)';
+}
+
 class AdbDevice {
   final String id; // serial or host:port
   final String model;

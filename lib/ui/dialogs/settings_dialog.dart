@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/theme_service.dart';
@@ -89,9 +89,13 @@ class SettingsDialog extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          Platform.isMacOS
-                              ? '⌘S to reopen'
-                              : 'Ctrl+S to reopen',
+                          // ⌘ exists only on macOS; every other desktop target
+                          // uses Ctrl, so the hint follows the platform rather
+                          // than assuming the author's Mac.
+                          switch (defaultTargetPlatform) {
+                            TargetPlatform.macOS => '⌘S',
+                            _ => 'Ctrl+S',
+                          },
                           style: FiraCodeStyle.get(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,

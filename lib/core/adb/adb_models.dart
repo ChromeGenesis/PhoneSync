@@ -133,6 +133,24 @@ enum ConnectionStatus {
 
 enum TransferKind { pull, push }
 
+/// Basename of [path], whichever separator wrote it: a device path uses '/',
+/// a local Windows path uses '\'.
+String baseNameOf(String path) {
+  final norm = path.replaceAll('\\', '/');
+  final i = norm.lastIndexOf('/');
+  return i >= 0 ? norm.substring(i + 1) : norm;
+}
+
+/// Names a transfer for a toast or a log line: the first two basenames plus
+/// a count. A raw path dump is unreadable at snackbar width, and a bare count
+/// — what this used to say — does not tell anyone *what* moved.
+String summarizeNames(List<String> names) {
+  if (names.isEmpty) return 'no items';
+  if (names.length == 1) return names.first;
+  if (names.length == 2) return '${names[0]}, ${names[1]}';
+  return '${names.take(2).join(', ')} +${names.length - 2} more';
+}
+
 /// What to do when a push would overwrite a *newer* file on the phone.
 ///
 /// Timestamps are the only signal ADB gives us, and clock skew between a
@@ -172,18 +190,33 @@ class TransferItem {
   bool conflicted = false;
   String? conflictNote;
 
+  /// Per-item outcome once the job has run it: true once transferred, false
+  /// when it failed or was held/skipped, null while still pending. [reason]
+  /// carries the human-readable cause when it is false.
+  bool? ok;
+  String? reason;
+
   TransferItem({
     required this.source,
     required this.target,
     this.totalBytes = -1,
     this.sentBytes = 0,
   });
+
+  /// What this item is, by name — a push source is local, a pull source is
+  /// on the device, and both basename the same way.
+  String get name => baseNameOf(source);
 }
 
 class TransferJob {
   final String id;
   final TransferKind kind;
   final String label;
+
+  /// Where the items are going — the device folder for a push, the local
+  /// folder for a pull. Recorded at enqueue so the UI can name the
+  /// destination even once the queue has been trimmed.
+  final String destination;
   final List<TransferItem> items;
   TransferStatus status;
   String? error;
@@ -198,10 +231,15 @@ class TransferJob {
     required this.id,
     required this.kind,
     required this.label,
+    required this.destination,
     required this.items,
     this.status = TransferStatus.queued,
     this.error,
   });
+
+  /// The names of what moved: "photo.jpg, notes.pdf +3 more".
+  String get itemSummary =>
+      summarizeNames([for (final it in items) it.name]);
 
   int get totalBytes {
     var sum = 0;

@@ -108,7 +108,11 @@ class TransfersView extends StatelessWidget {
                       )
                     : ListView.builder(
                         itemCount: jobs.length,
-                        itemBuilder: (context, i) => _JobCard(job: jobs[i]),
+                        // The key matters: a new push is inserted at index 0,
+                        // so without it the open state would slide onto a
+                        // different job as the list shifts.
+                        itemBuilder: (context, i) =>
+                            _JobCard(key: ValueKey(jobs[i].id), job: jobs[i]),
                       ),
               ),
             ],
@@ -223,14 +227,24 @@ class _JobButton extends StatelessWidget {
   }
 }
 
-class _JobCard extends StatelessWidget {
+class _JobCard extends StatefulWidget {
   final TransferJob job;
-  const _JobCard({required this.job});
+  const _JobCard({super.key, required this.job});
+
+  @override
+  State<_JobCard> createState() => _JobCardState();
+}
+
+class _JobCardState extends State<_JobCard> {
+  /// Collapsed by default: the header already names what moved, and a
+  /// 200-file drop would otherwise open as a 200-row wall.
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final service = Services.transfers;
+    final job = widget.job;
     final total = job.totalBytes;
     final sent = job.sentBytes;
     final progress = total > 0 ? (sent / total).clamp(0.0, 1.0) : null;
@@ -313,6 +327,16 @@ class _JobCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              _JobButton(
+                icon: _open
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                tooltip: _open
+                    ? 'Hide the item list'
+                    : 'Show every item — ${job.items.length} total',
+                onTap: () => setState(() => _open = !_open),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -386,6 +410,123 @@ class _JobCard extends StatelessWidget {
                 minHeight: 4,
                 backgroundColor: colors.border.withAlpha(30),
                 valueColor: AlwaysStoppedAnimation(colors.goldPrimary),
+              ),
+            ),
+          ],
+          // The item list: every name and the exact place it landed. This is
+          // the detail the job header used to swallow into a count.
+          if (_open) ...[
+            const SizedBox(height: 9),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: BoxDecoration(
+                color: colors.scaffoldBackground.withAlpha(80),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: colors.border.withAlpha(45)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < job.items.length; i++)
+                    _itemRow(
+                      colors,
+                      job.items[i],
+                      last: i == job.items.length - 1,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// One transferred item: what it is, and where it went.
+  Widget _itemRow(AppColors colors, TransferItem it, {required bool last}) {
+    // Four outcomes, not two: a policy skip is neither a success nor a fault,
+    // and painting it red would blame the user's own conflict setting.
+    final pending = it.ok == null;
+    final skipped =
+        !pending && it.ok == false && (it.reason?.startsWith('skipped') ?? false);
+    final IconData icon;
+    final Color tint;
+    if (pending) {
+      icon = Icons.schedule_rounded;
+      tint = colors.textMuted;
+    } else if (it.ok == true) {
+      icon = Icons.check_circle_outline_rounded;
+      tint = colors.emeraldLive;
+    } else if (skipped) {
+      icon = Icons.skip_next_rounded;
+      tint = colors.textGold;
+    } else if (it.conflicted) {
+      icon = Icons.warning_amber_rounded;
+      tint = colors.roseDanger;
+    } else {
+      icon = Icons.cancel_outlined;
+      tint = colors.roseDanger;
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: tint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  it.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: OutfitStyle.get(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Tooltip(
+                  message: it.target,
+                  child: Text(
+                    it.target,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: OutfitStyle.get(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: colors.textMuted,
+                    ),
+                  ),
+                ),
+                if (it.reason != null) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    it.reason!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: OutfitStyle.get(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: skipped ? colors.textGold : colors.roseDanger,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (it.totalBytes > 0) ...[
+            const SizedBox(width: 8),
+            Text(
+              it.totalBytes.formatBytes,
+              style: OutfitStyle.get(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: colors.textMuted,
               ),
             ),
           ],

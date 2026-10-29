@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../app.dart';
+import '../core/adb/adb_models.dart';
 import '../core/log/log_service.dart';
 import '../services/app_services.dart';
 import '../services/theme_service.dart';
@@ -348,15 +349,18 @@ class _AppSidebarState extends State<AppSidebar> {
   Future<void> _pushFiles(BuildContext context) async {
     final files = await openFiles();
     if (files.isEmpty) return;
-    Services.transfers
-        .enqueuePush(files.map((f) => f.path).toList(), '/sdcard/Download/');
-    Services.log.transfer(LogLevel.info, 'Queued push of ${files.length} file(s) → /sdcard/Download');
+    final paths = [for (final f in files) f.path];
+    final dest = BrowserController.instance.pushTarget;
+    Services.transfers.enqueuePush(paths, dest);
+    final names = summarizeNames([for (final p in paths) baseNameOf(p)]);
+    Services.log.transfer(LogLevel.info, 'Queued push of $names → $dest');
     if (context.mounted) {
       showAppSnack(
         context,
         type: SnackType.info,
-        title: 'Push queued',
-        message: '${files.length} file(s) → /sdcard/Download',
+        title:
+            'Push queued — ${paths.length} file${paths.length == 1 ? '' : 's'}',
+        message: '$names → $dest',
       );
     }
   }
@@ -364,7 +368,18 @@ class _AppSidebarState extends State<AppSidebar> {
   Future<void> _pushFolder(BuildContext context) async {
     final dir = await getDirectoryPath();
     if (dir == null) return;
-    Services.transfers.enqueuePush([dir], '/sdcard/Download/');
+    final dest = BrowserController.instance.pushTarget;
+    final name = baseNameOf(dir);
+    Services.transfers.enqueuePush([dir], dest);
+    Services.log.transfer(LogLevel.info, 'Queued push of $name → $dest');
+    if (context.mounted) {
+      showAppSnack(
+        context,
+        type: SnackType.info,
+        title: 'Push queued — 1 folder',
+        message: '$name → $dest',
+      );
+    }
   }
 
   Future<void> _sendText(BuildContext context) async {

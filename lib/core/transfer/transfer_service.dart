@@ -46,10 +46,12 @@ class TransferService extends ChangeNotifier {
               totalBytes: f.size > 0 ? f.size : -1,
             ))
         .toList();
+    final dest = _prettyDir(destDir);
     final job = TransferJob(
       id: 'pull-${DateTime.now().microsecondsSinceEpoch}',
       kind: TransferKind.pull,
-      label: 'Pull ${files.length} file${files.length == 1 ? '' : 's'} → $destDir',
+      label: 'Pull ${summarizeNames([for (final f in files) f.name])} → $dest',
+      destination: dest,
       items: items,
     );
     _jobs.insert(0, job);
@@ -67,10 +69,13 @@ class TransferService extends ChangeNotifier {
                   '${p.split(Platform.pathSeparator).last}',
             ))
         .toList();
+    final dest = _prettyDir(deviceDir);
     final job = TransferJob(
       id: 'push-${DateTime.now().microsecondsSinceEpoch}',
       kind: TransferKind.push,
-      label: 'Push ${localPaths.length} item${localPaths.length == 1 ? '' : 's'} → $deviceDir',
+      label:
+          'Push ${summarizeNames([for (final p in localPaths) baseNameOf(p)])} → $dest',
+      destination: dest,
       items: items,
     );
     _jobs.insert(0, job);
@@ -78,6 +83,14 @@ class TransferService extends ChangeNotifier {
     notifyListeners();
     _pump();
     return job.id;
+  }
+
+  /// Display form of a destination: no trailing separator, so a label reads
+  /// "→ /sdcard/Download" rather than "→ /sdcard/Download/". A path that is
+  /// nothing but separators keeps itself rather than vanishing.
+  static String _prettyDir(String dir) {
+    final trimmed = dir.replaceAll(RegExp(r'[\\/]+$'), '');
+    return trimmed.isEmpty ? dir : trimmed;
   }
 
   void cancel(String jobId) {
@@ -164,6 +177,8 @@ class TransferService extends ChangeNotifier {
     // separate counter to zero.
     for (final item in failedItems) {
       item.sentBytes = 0;
+      item.ok = null;
+      item.reason = null;
     }
     job.items
       ..clear()
@@ -175,7 +190,7 @@ class TransferService extends ChangeNotifier {
     job.status = TransferStatus.queued;
     notifyListeners();
     LogService.instance.transfer(LogLevel.info,
-        'Retrying ${failedItems.length} item(s) in ${job.label}');
+        'Retrying ${failedItems.length} item(s) → ${job.destination}');
     _pump();
   }
 
@@ -223,7 +238,8 @@ class TransferService extends ChangeNotifier {
     notifyListeners();
   }
 
-  static final TransferJob _dummy = TransferJob(id: '', kind: TransferKind.pull, label: '', items: []);
+  static final TransferJob _dummy = TransferJob(
+      id: '', kind: TransferKind.pull, label: '', destination: '', items: []);
 
   void _trim() {
     if (_jobs.length <= 60) return;
@@ -301,6 +317,8 @@ class TransferService extends ChangeNotifier {
         item.conflicted = false;
         item.conflictNote = null;
         item.sentBytes = 0;
+        item.ok = null;
+        item.reason = null;
       }
       job.doneItems = 0;
       job.status = TransferStatus.queued;
@@ -357,6 +375,8 @@ class TransferService extends ChangeNotifier {
       // the rest of the job can finish instead of failing on them again.
       if (item.conflicted) {
         failed++;
+        item.ok ??= false;
+        item.reason ??= item.conflictNote ?? 'held — the phone copy is newer';
         continue;
       }
       try {
@@ -368,6 +388,8 @@ class TransferService extends ChangeNotifier {
             notifyListeners();
           });
           item.sentBytes = item.totalBytes > 0 ? item.totalBytes : item.sentBytes;
+          item.ok = true;
+          item.reason = null;
         } else {
           // Conflict check before anything is written: if the phone already
           // has a *newer* file at this exact destination, pushing silently
@@ -375,10 +397,14 @@ class TransferService extends ChangeNotifier {
           final decision = await _resolveConflict(item);
           if (decision == _ConflictAction.hold) {
             failed++;
+            item.ok = false;
+            item.reason = item.conflictNote ?? 'held — the phone copy is newer';
             continue;
           }
           if (decision == _ConflictAction.skip) {
             skipped++;
+            item.ok = false;
+            item.reason = item.conflictNote ?? 'skipped — the phone copy is newer';
             continue;
           }
           final okPush = await AdbClient.instance.push(item.source, _dirOf(item.target));
@@ -387,6 +413,8 @@ class TransferService extends ChangeNotifier {
           item.sentBytes = item.totalBytes = await f.length();
           item.conflicted = false;
           item.conflictNote = null;
+          item.ok = true;
+          item.reason = null;
           // The phone's contents changed — cached listings for that folder
           // must not be served again.
           BrowserController.instance.invalidatePath(_dirOf(item.target));
@@ -394,6 +422,8 @@ class TransferService extends ChangeNotifier {
         ok++;
       } catch (e) {
         failed++;
+        item.ok = false;
+        item.reason = '$e';
         log.transfer(LogLevel.error, 'Failed ${job.kind.name} ${item.source} — $e');
       } finally {
         job.doneItems++;
@@ -402,10 +432,16 @@ class TransferService extends ChangeNotifier {
     }
 
     job.finishedAt = DateTime.now();
+    final verb = job.kind == TransferKind.pull ? 'Pulled' : 'Pushed';
     if (failed == 0) {
       job.status = TransferStatus.done;
-      log.transfer(LogLevel.success,
-          '${job.kind == TransferKind.pull ? 'Pulled' : 'Pushed'} $ok file${ok == 1 ? '' : 's'} — ${job.label}');
+      // The activity log is where a transfer is checked after the fact, so it
+      // names what moved and where — a count alone answers neither question.
+      log.transfer(
+        LogLevel.success,
+        '$verb ${job.itemSummary} → ${job.destination}'
+        '${skipped > 0 ? ' ($skipped skipped — newer on phone)' : ''}',
+      );
     } else if (ok == 0) {
       job.status = TransferStatus.failed;
       job.error = skipped > 0 ? 'all $skipped item(s) skipped (newer on phone)' : 'all $failed items failed';

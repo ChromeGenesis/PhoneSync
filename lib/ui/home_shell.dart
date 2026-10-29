@@ -4,9 +4,11 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
 import '../app.dart';
+import '../core/adb/adb_models.dart';
 import '../core/log/log_service.dart';
 import '../services/app_services.dart';
 import '../services/theme_service.dart';
+import '../state/browser_controller.dart';
 import '../state/connection_controller.dart';
 import '../widgets/sanctuary_background.dart';
 import '../widgets/glass_snackbar.dart';
@@ -56,19 +58,25 @@ class _HomeShellState extends State<HomeShell> {
       }
     }
     if (files.isEmpty && folders.isEmpty) return;
+    // Land in the folder on screen rather than always Download — the drop
+    // zone *is* the workspace pane, so wherever you are looking is where you
+    // mean it to go. A merged or virtual view has no single folder, and
+    // falls back.
+    final dest = BrowserController.instance.pushTarget;
+    final dropped = [...files, ...folders];
     // Dropped directories are pushed as paths — adb push recurses into them.
-    Services.transfers.enqueuePush([...files, ...folders], '/sdcard/Download/');
+    Services.transfers.enqueuePush(dropped, dest);
     Services.log.transfer(
       LogLevel.info,
-      'Queued drag-and-drop push: ${files.length} file(s)${folders.isNotEmpty ? ' + ${folders.length} folder(s)' : ''}',
+      'Queued drag-and-drop push of ${summarizeNames([for (final p in dropped) baseNameOf(p)])} → $dest',
     );
     _select(ShellTab.transfers);
     showAppSnack(
       context,
       type: SnackType.success,
-      title: 'Push queued',
+      title: 'Push queued — ${dropped.length} item${dropped.length == 1 ? '' : 's'}',
       message:
-          '${files.length} file(s)${folders.isNotEmpty ? ' + ${folders.length} folder(s)' : ''} → /sdcard/Download',
+          '${summarizeNames([for (final p in dropped) baseNameOf(p)])} → $dest',
     );
   }
 

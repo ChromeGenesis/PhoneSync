@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# CI artifacts downloaded into the working tree (build zips, and the backup
+# of the previous install taken before one is replaced).
+/artifacts/

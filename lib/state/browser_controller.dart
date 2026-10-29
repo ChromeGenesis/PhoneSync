@@ -43,6 +43,18 @@ class BrowseLocation {
       [path]);
 }
 
+/// One segment of the path bar. [path] is null for the segment you are
+/// already standing on; [isMerge] marks a sibling source rather than a child
+/// (a preset like Screenshots reads from several folders at once), which
+/// changes the separator that precedes it.
+@immutable
+class PathCrumb {
+  final String label;
+  final String? path;
+  final bool isMerge;
+  const PathCrumb(this.label, {this.path, this.isMerge = false});
+}
+
 /// One grouped row for the list view: either a header or a file.
 @immutable
 class BrowserRow {
@@ -203,6 +215,59 @@ class BrowserController extends ChangeNotifier {
 
   List<PhoneFile> get selectedFiles =>
       _filtered.where((f) => _selection.contains(f.path)).toList();
+
+  /// The folder a push lands in: whatever is open in Browse when it is a
+  /// single real path, otherwise Download. A merged view (Screenshots reads
+  /// three folders) and Recent Files have no one folder to write to.
+  String get pushTarget {
+    final paths = _location.paths;
+    return paths.length == 1 ? paths.first : '/sdcard/Download';
+  }
+
+  /// Segments for the path bar. The final segment carries a null path —
+  /// that is where we already are; every earlier one navigates. A preset
+  /// with no single path (Recent Files) reports only its own title, and a
+  /// merged preset lists its source folders as siblings.
+  List<PathCrumb> get pathCrumbs {
+    final loc = _location;
+    if (loc.paths.length == 1) {
+      final segs =
+          loc.paths.first.split('/').where((s) => s.isNotEmpty).toList();
+      if (segs.isEmpty) return [PathCrumb(loc.title)];
+      final crumbs = <PathCrumb>[];
+      var acc = '';
+      for (var i = 0; i < segs.length; i++) {
+        acc = '$acc/${segs[i]}';
+        // The first segment opens the path — spell the slash so it reads as
+        // a path rather than as a folder name.
+        crumbs.add(PathCrumb(
+          i == 0 ? '/${segs[i]}' : segs[i],
+          path: i == segs.length - 1 ? null : acc,
+        ));
+      }
+      return crumbs;
+    }
+    if (loc.paths.isEmpty) return [PathCrumb(loc.title)];
+    return [
+      PathCrumb(loc.title),
+      for (final p in loc.paths) PathCrumb(p, path: p, isMerge: true),
+    ];
+  }
+
+  /// The containing folder of the current location, or null at its top.
+  String? get parentPath {
+    final paths = _location.paths;
+    if (paths.length != 1) return null;
+    final path = paths.first;
+    final i = path.lastIndexOf('/');
+    if (i <= 0) return null;
+    final parent = path.substring(0, i);
+    return parent.isEmpty ? null : parent;
+  }
+
+  /// Navigate into one folder on the device.
+  Future<void> openPath(String path) =>
+      openLocation(BrowseLocation.deviceFolder(path));
 
   Future<void> openLocation(BrowseLocation loc, {bool force = false}) async {
     if (!force && identical(loc, _location) && _entries.isNotEmpty) return;

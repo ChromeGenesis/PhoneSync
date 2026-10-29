@@ -87,10 +87,17 @@ class _BrowseViewState extends State<BrowseView> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _toolbar(context, browser, connected),
-              const SizedBox(height: 10),
-              // Storage readout sits above the list rather than behind a menu:
-              // "why is my phone full" is the usual reason to open this app.
+              const SizedBox(height: 8),
+              // Where this listing is, as a path — the answer to "which
+              // folder am I actually in", which a leaf title like "Camera"
+              // never gives. Every ancestor is one click away, so this is
+              // also how you go back up.
               if (connected) ...[
+                _pathBar(context, browser),
+                const SizedBox(height: 10),
+                // Storage readout sits above the list rather than behind a
+                // menu: "why is my phone full" is the usual reason to open
+                // this app.
                 const StoragePanel(),
                 const SizedBox(height: 10),
               ],
@@ -188,6 +195,113 @@ class _BrowseViewState extends State<BrowseView> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Address bar: the current location written out as a path, in the shape
+  /// Windows' address bar and Android's both use. The last segment is where
+  /// you are; every earlier one clicks back to that ancestor, and a merged
+  /// preset lists its source folders as siblings so the three paths behind
+  /// "Screenshots" are visible instead of implied.
+  Widget _pathBar(BuildContext context, BrowserController browser) {
+    final colors = context.colors;
+    final parent = browser.parentPath;
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: colors.surface.withAlpha(90),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: colors.border.withAlpha(40)),
+      ),
+      child: Row(
+        children: [
+          Tooltip(
+            message: parent == null ? 'No parent folder' : 'Up to $parent',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(7),
+                onTap: parent == null ? null : () => browser.openPath(parent),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Icon(
+                    Icons.arrow_upward_rounded,
+                    size: 14,
+                    color: parent == null
+                        ? colors.textMuted.withAlpha(110)
+                        : colors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Container(width: 1, height: 16, color: colors.border.withAlpha(70)),
+          const SizedBox(width: 5),
+          Expanded(child: _crumbs(context, browser)),
+        ],
+      ),
+    );
+  }
+
+  /// The segments themselves, scrolling sideways when a path runs deep.
+  Widget _crumbs(BuildContext context, BrowserController browser) {
+    final colors = context.colors;
+    final crumbs = browser.pathCrumbs;
+    final children = <Widget>[];
+    for (var i = 0; i < crumbs.length; i++) {
+      final c = crumbs[i];
+      if (i > 0) {
+        children.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            c.isMerge ? '·' : '›',
+            style: OutfitStyle.get(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: colors.textMuted,
+            ),
+          ),
+        ));
+      }
+      if (c.path == null) {
+        children.add(
+            _crumbLabel(context, c.label, colors.textGold, FontWeight.w700));
+      } else {
+        children.add(
+          InkWell(
+            borderRadius: BorderRadius.circular(5),
+            onTap: () => browser.openPath(c.path!),
+            child: _crumbLabel(
+                context, c.label, colors.textSecondary, FontWeight.w600),
+          ),
+        );
+      }
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(children: children),
+    );
+  }
+
+  Widget _crumbLabel(
+    BuildContext context,
+    String label,
+    Color color,
+    FontWeight weight,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: OutfitStyle.get(
+          fontSize: 11.5,
+          fontWeight: weight,
+          color: color,
+        ),
+      ),
     );
   }
 
@@ -566,15 +680,17 @@ class _BrowseViewState extends State<BrowseView> {
     final dest = Services.config.saveDir;
     Services.transfers.enqueuePull(selected, dest);
     BrowserController.instance.clearSelection();
+    final names = summarizeNames([for (final f in selected) f.name]);
     Services.log.transfer(
       LogLevel.info,
-      'Queued pull of ${selected.length} file(s) → $dest',
+      'Queued pull of $names → $dest',
     );
     showAppSnack(
       context,
       type: SnackType.info,
-      title: 'Pull queued',
-      message: '${selected.length} file(s) → $dest',
+      title:
+          'Pull queued — ${selected.length} file${selected.length == 1 ? '' : 's'}',
+      message: '$names → $dest',
     );
   }
 }

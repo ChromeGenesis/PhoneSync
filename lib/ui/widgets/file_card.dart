@@ -69,13 +69,21 @@ class FileCard extends StatelessWidget {
   /// onDoubleTap, which holds every single tap ~300ms to disambiguate.
   void _handleTap(BuildContext context, BrowserController browser) {
     final now = DateTime.now();
+    // Only images were openable before, which left every folder in a listing
+    // inert — the hierarchy was on screen but unreachable.
+    final openable = file.isDir || file.isImage;
     final isDoubleTap =
-        file.isImage &&
+        openable &&
         _lastTapPath == file.path &&
         now.difference(_lastTapAt) < const Duration(milliseconds: 300);
     _lastTapPath = file.path;
     _lastTapAt = now;
     if (isDoubleTap) {
+      if (file.isDir) {
+        // openLocation clears the selection, so there is nothing to cancel.
+        browser.openPath(file.path);
+        return;
+      }
       browser.toggleSelect(file.path); // cancel the selection the 1st tap made
       showPreview(context, file);
       return;
@@ -165,7 +173,15 @@ class FileCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (file.isImage)
+                        // A folder's one explicit way in — the double-tap is
+                        // otherwise invisible from the card itself.
+                        if (file.isDir)
+                          GlassLikeIconButton(
+                            icon: Icons.folder_open_outlined,
+                            tooltip: 'Open folder',
+                            onTap: () => browser.openPath(file.path),
+                          )
+                        else if (file.isImage)
                           GlassLikeIconButton(
                             icon: Icons.visibility_outlined,
                             tooltip: 'Preview',

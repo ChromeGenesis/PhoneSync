@@ -1,0 +1,78 @@
+name: Build Windows
+
+# Builds the Windows release on a hosted runner, mirroring build-macos.yml.
+# The operator's installed copy was built locally on an older tree and predates
+# the wireless pairing work, so this is the only way to get a current .exe
+# without a local Flutter setup.
+#
+# Triggers:
+#   - push / PR             → build + artifact
+#   - workflow_dispatch     → same, on demand
+#   - tag v*                → same, plus the release artifact below
+on:
+  workflow_dispatch:
+  push:
+    branches: ['**']
+    tags:
+      - 'v*'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to the SDK this tree is developed against; bump deliberately rather
+  # than tracking `stable` under a release build.
+  FLUTTER_VERSION: 3.44.6
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package app
+        # Compress-Archive over the runner/Release folder: the exe, the DLLs
+        # and data/ (which holds the Dart AOT snapshot) must travel together.
+        shell: pwsh
+        run: |
+          $DIR = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$DIR/phonesync.exe")) { throw "expected $DIR/phonesync.exe to exist" }
+          Compress-Archive -Path "$DIR/*" -DestinationPath phonesync-windows.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonesync-windows
+          path: phonesync-windows.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonesync-windows-${{ github.ref_name }}
+          path: phonesync-windows.zip
+          if-no-files-found: error
+          retention-days: 90

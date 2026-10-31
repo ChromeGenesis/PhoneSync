@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -15,6 +16,7 @@ import '../widgets/glass_snackbar.dart';
 import '../widgets/shared/text_style_cache.dart';
 import 'header_bar.dart';
 import 'sidebar.dart';
+import 'dialogs/text_inbox_dialog.dart';
 import 'views/activity_view.dart';
 import 'views/browse_view.dart';
 import 'views/transfers_view.dart';
@@ -34,6 +36,42 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   ShellTab _tab = ShellTab.browse;
   bool _dragging = false;
+  int _seenInboxEntries = 0;
+  StreamSubscription<void>? _inboxChanges;
+
+  @override
+  void initState() {
+    super.initState();
+    // The shell is always mounted, so it is the natural place to surface
+    // phone text arrivals that happen with no inbox UI open.
+    _seenInboxEntries = Services.textInbox.entries.length;
+    _inboxChanges = Services.textInbox.changes.listen(_onInboxChange);
+  }
+
+  @override
+  void dispose() {
+    _inboxChanges?.cancel();
+    super.dispose();
+  }
+
+  void _onInboxChange(void event) {
+    final inbox = Services.textInbox;
+    final count = inbox.entries.length;
+    if (count > _seenInboxEntries && mounted) {
+      final latest = inbox.entries.first;
+      final preview =
+          latest.text.length > 80 ? '${latest.text.substring(0, 80)}…' : latest.text;
+      showAppSnack(
+        context,
+        type: SnackType.success,
+        title: 'Text received — copied to clipboard',
+        message: preview,
+        duration: const Duration(milliseconds: 4200),
+        onTap: () => TextInboxDialog.show(context),
+      );
+    }
+    _seenInboxEntries = count;
+  }
 
   void _select(ShellTab t) => setState(() => _tab = t);
 

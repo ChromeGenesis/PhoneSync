@@ -627,8 +627,22 @@ class AdbClient {
 
   /// Streams a device file's bytes over `exec-out` (binary safe).
   /// Reports progress via [onChunk]. Returns total bytes read.
-  Future<int> catToFile(String devicePath, File dest, {void Function(int)? onChunk}) async {
-    final proc = await start(['exec-out', 'cat', devicePath]);
+  Future<int> catToFile(String devicePath, File dest, {void Function(int)? onChunk}) =>
+      execOutToFile(['cat', devicePath], dest, onChunk: onChunk);
+
+  /// Streams the current screen as PNG bytes (`screencap -p`) into [dest].
+  ///
+  /// exec-out, never `adb shell screencap`: the shell transport goes through a
+  /// pty that rewrites \n to \r\n and corrupts the binary stream. exec-out is
+  /// binary-safe on every Android version.
+  Future<int> screencapToFile(File dest, {void Function(int)? onChunk}) =>
+      execOutToFile(['screencap', '-p'], dest, onChunk: onChunk);
+
+  /// Streams a device command's stdout over `exec-out` (binary safe) into
+  /// [dest]. Reports progress via [onChunk]. Returns total bytes read.
+  Future<int> execOutToFile(List<String> deviceArgs, File dest,
+      {void Function(int)? onChunk}) async {
+    final proc = await start(['exec-out', ...deviceArgs]);
     if (proc == null) throw StateError('failed to start adb exec-out');
     var total = 0;
     final sink = dest.openWrite();
@@ -641,7 +655,7 @@ class AdbClient {
       await sink.flush();
       await sink.close();
       final code = await proc.exitCode;
-      if (code != 0) throw StateError('exec-out cat exited $code');
+      if (code != 0) throw StateError('exec-out ${deviceArgs.first} exited $code');
     } catch (_) {
       await sink.close();
       rethrow;

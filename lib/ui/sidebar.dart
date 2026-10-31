@@ -16,6 +16,8 @@ import '../widgets/shared/scroll_hint_caret.dart';
 import '../widgets/shared/section_label.dart';
 import '../widgets/shared/text_style_cache.dart';
 import 'dialogs/send_to_phone_dialog.dart';
+import 'dialogs/screenshot_preview_dialog.dart' show takePhoneScreenshot;
+import 'dialogs/text_inbox_dialog.dart';
 import 'home_shell.dart';
 
 /// 208px glass sidebar: browse locations, discovered phone folders, and
@@ -177,7 +179,13 @@ class _AppSidebarState extends State<AppSidebar> {
               _actionButton(context, Icons.chat_bubble_outline, 'Send Text / Link…',
                   () => _sendText(context),
                   enabled: connected),
+              _actionButton(context, Icons.move_to_inbox_rounded, 'Receive Text…',
+                  () => TextInboxDialog.show(context),
+                  enabled: true),
               const SizedBox(height: 4),
+              _actionButton(context, Icons.photo_camera_outlined, 'Phone Screenshot',
+                  () => takePhoneScreenshot(context),
+                  enabled: connected),
               _actionButton(
                   context, Icons.save_alt, 'Set Save Folder…', () => _pickSaveFolder(context),
                   enabled: true),

@@ -1,6 +1,8 @@
 import '../core/adb/adb_client.dart';
 import '../core/config/app_config.dart';
+import '../core/device/screenshot_service.dart';
 import '../core/log/log_service.dart';
+import '../core/text/text_inbox_service.dart';
 import '../core/thumbnails/thumbnail_service.dart';
 import '../core/transfer/transfer_service.dart';
 
@@ -14,6 +16,8 @@ class Services {
   static final LogService log = LogService.instance;
   static final TransferService transfers = TransferService.instance;
   static final ThumbnailService thumbnails = ThumbnailService.instance;
+  static final TextInboxService textInbox = TextInboxService.instance;
+  static final ScreenshotService screenshots = ScreenshotService.instance;
 
   /// Startup order matters: config first (it carries the log-persistence
   /// preference), then the log's own restore from disk.

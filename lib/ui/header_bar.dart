@@ -11,7 +11,9 @@ import '../widgets/glass_snackbar.dart';
 import '../widgets/shared/live_badge.dart';
 import '../widgets/shared/text_style_cache.dart';
 import '../widgets/shared/theme_mode_selector.dart';
+import 'dialogs/screenshot_preview_dialog.dart' show takePhoneScreenshot;
 import 'dialogs/settings_dialog.dart';
+import 'dialogs/text_inbox_dialog.dart';
 import 'home_shell.dart';
 
 /// Broadcast-bar-style header: app identity, device status, prominent theme
@@ -81,6 +83,16 @@ class HeaderBar extends StatelessWidget {
                 _TransferChip(onOpen: () => onTabSelected(ShellTab.transfers)),
                 const SizedBox(width: 10),
               ],
+              // Phone actions live in the header so they are one tap from
+              // anywhere, whatever tab is open.
+              GlassIconButton(
+                icon: Icons.photo_camera_outlined,
+                tooltip: 'Phone screenshot',
+                onPressed: connection.isConnected ? () => takePhoneScreenshot(context) : null,
+              ),
+              const SizedBox(width: 8),
+              const _InboxButton(),
+              const SizedBox(width: 10),
               GlassButton(
                 label: 'Refresh',
                 icon: const Icon(Icons.refresh_rounded, size: 15),
@@ -231,7 +243,6 @@ class _StatusChip extends StatelessWidget {
 class _TransferChip extends StatelessWidget {
   final VoidCallback onOpen;
   const _TransferChip({required this.onOpen});
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -265,6 +276,58 @@ class _TransferChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Inbox affordance for text arriving from the phone. The gold dot carries the
+/// unread count — without it, a text sent while the app sat unopened in the
+/// background would be invisible until someone happened to check.
+class _InboxButton extends StatelessWidget {
+  const _InboxButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return StreamBuilder<void>(
+      stream: Services.textInbox.changes,
+      builder: (context, _) {
+        final unread = Services.textInbox.unreadCount;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GlassIconButton(
+              icon: Icons.move_to_inbox_rounded,
+              tooltip: 'Text inbox',
+              onPressed: () => TextInboxDialog.show(context),
+            ),
+            if (unread > 0)
+              Positioned(
+                right: -3,
+                top: -3,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 15),
+                  height: 15,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: colors.goldPrimary,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colors.scaffoldBackground, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(color: colors.goldGlow, blurRadius: 8, offset: const Offset(0, 1)),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    unread > 9 ? '9+' : '$unread',
+                    style: OutfitStyle.get(
+                        fontSize: 8.5, fontWeight: FontWeight.w800, color: Colors.black),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

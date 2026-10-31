@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/log/log_service.dart';
 import 'services/app_services.dart';
 import 'services/theme_service.dart';
 import 'state/browser_controller.dart';
@@ -13,6 +17,15 @@ Future<void> main() async {
 
   // Fonts ship as bundled assets (assets/google_fonts/) — never over HTTP.
   GoogleFonts.config.allowRuntimeFetching = false;
+
+  // Every text arriving from the phone is copied to the PC clipboard on the
+  // spot, whether or not any window is open on the inbox — that is the whole
+  // point of the feature: paste on the phone, Ctrl+V on the PC.
+  Services.textInbox.onReceived = (entry) {
+    unawaited(Clipboard.setData(ClipboardData(text: entry.text)));
+    Services.log.transfer(LogLevel.success,
+        'Text received from phone (${entry.text.length} chars) — copied to clipboard');
+  };
 
   await windowManager.ensureInitialized();
   // Deliberately NO waitUntilReadyToShow / WindowOptions here: every
@@ -40,7 +53,20 @@ Future<void> main() async {
 }
 
 void _onConnectionChanged() {
-  if (!ConnectionController.instance.isConnected) {
+  final connection = ConnectionController.instance;
+  if (!connection.isConnected) {
     BrowserController.instance.onDeviceLost();
+    return;
   }
+  // Every (re)connect gets a fresh transport, and adb reverse rules die with
+  // their transport — so the text tunnel is re-registered here each time.
+  unawaited(Services.textInbox.ensureReady().then((ok) {
+    if (ok) {
+      Services.log.app(LogLevel.info,
+          'Text inbox live on 127.0.0.1:${Services.textInbox.port} (adb reverse)');
+    } else {
+      Services.log.app(LogLevel.warning,
+          'Text inbox unavailable — ${Services.textInbox.tunnelError}');
+    }
+  }));
 }

@@ -87,6 +87,15 @@ void showAppSnack(
   required SnackType type,
   required String title,
   required String message,
+  Duration duration = const Duration(milliseconds: 2500),
+  VoidCallback? onTap,
 }) {
-  GlassSnackbar.show(context, type: type, title: title, message: message);
+  GlassSnackbar.show(
+    context,
+    type: type,
+    title: title,
+    message: message,
+    duration: duration,
+    onTap: onTap,
+  );
 }
